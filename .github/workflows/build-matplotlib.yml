@@ -134,30 +134,20 @@ jobs:
       - name: Write matplotlib verify script
         run: |
           printf '%s\n' \
-            "import os, io, traceback" \
+            "import os, io" \
             "os.environ['MPLBACKEND'] = 'Agg'" \
             "os.environ.setdefault('MPLCONFIGDIR', '/tmp')" \
             "import matplotlib" \
-            "from matplotlib import font_manager as fmod" \
             "dp = str(matplotlib.get_data_path())" \
             "idx = os.path.join(dp, 'fonts', '_wasi_index.txt')" \
-            "print('DIAG idx', idx, 'exists', os.path.exists(idx))" \
-            "try:" \
-            "    print('DIAG idx_firstline', repr(open(idx).readline()))" \
-            "except Exception as e:" \
-            "    print('DIAG idx_open_err', repr(e))" \
+            "print('DIAG idx_exists', os.path.exists(idx))" \
             "one = os.path.join(dp, 'fonts', 'ttf', 'DejaVuSans.ttf')" \
             "print('DIAG font_exists', os.path.exists(one))" \
+            "data = open(one, 'rb').read()" \
+            "print('DIAG read_bytes', len(data))" \
             "import matplotlib.ft2font as ft" \
-            "try:" \
-            "    f = ft.FT2Font(one); print('DIAG ft2font_path_ok', f.family_name)" \
-            "except Exception:" \
-            "    print('DIAG ft2font_path_err'); traceback.print_exc()" \
-            "try:" \
-            "    fh = open(one, 'rb'); f = ft.FT2Font(fh); print('DIAG ft2font_bytes_ok', f.family_name)" \
-            "except Exception:" \
-            "    print('DIAG ft2font_bytes_err'); traceback.print_exc()" \
-            "print('DIAG ttflist', len(fmod.fontManager.ttflist))" \
+            "f = ft.FT2Font(io.BytesIO(data))" \
+            "print('DIAG ft2font_bytes_ok', f.family_name)" \
             "print('DIAG DONE')" \
             > eryx-test/verify_mpl.py
           echo '--- verify_mpl.py ---'; cat eryx-test/verify_mpl.py
