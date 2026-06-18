@@ -32,13 +32,15 @@ fetch_sdist "${PILLOW_URL}" "${HERE}/src"
 
 # setup.py adjustments:
 #  - drop the Tkinter extension (dlopen()s Tk; no dlopen on wasi, useless headless)
-#  - link libsetjmp only into the extensions that use setjmp (_imaging via
-#    libjpeg, _imagingft via freetype). extra_link_args go after the objects, so
-#    -lsetjmp resolves __c_longjmp there. Forcing it into the other extensions
-#    (e.g. _imagingmath) would leave a dangling wasm EH tag eryx can't parse.
-python3 - "${HERE}/src" <<'PY'
+#  - whole-archive libsetjmp into only the setjmp-using extensions (_imaging via
+#    libjpeg, _imagingft via freetype). __c_longjmp is a weak EH tag that a plain
+#    -lsetjmp won't pull; forcing it into the other extensions (e.g. _imagingmath)
+#    would leave a dangling tag eryx can't parse.
+python3 - "${HERE}/src" "${SJLJ_LIB}" <<'PY'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1]) / "setup.py"
+sjlj = sys.argv[2]
+ela = '[%r, %r, %r]' % ("-Wl,--whole-archive", sjlj, "-Wl,--no-whole-archive")
 s = p.read_text()
 s = s.replace(
     'self._update_extension("PIL._imagingtk", tk_libs)',
@@ -47,12 +49,12 @@ s = s.replace(
 )
 s = s.replace(
     'Extension("PIL._imaging", files)',
-    'Extension("PIL._imaging", files, extra_link_args=["-lsetjmp"])',
+    'Extension("PIL._imaging", files, extra_link_args=%s)' % ela,
     1,
 )
 s = s.replace(
     'Extension("PIL._imagingft", ["src/_imagingft.c"])',
-    'Extension("PIL._imagingft", ["src/_imagingft.c"], extra_link_args=["-lsetjmp"])',
+    'Extension("PIL._imagingft", ["src/_imagingft.c"], extra_link_args=%s)' % ela,
     1,
 )
 p.write_text(s)

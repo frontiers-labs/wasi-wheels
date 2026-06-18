@@ -25,11 +25,10 @@ export PKG_CONFIG_PATH="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgc
 export PKG_CONFIG_LIBDIR="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgconfig:${PKG_CONFIG_LIBDIR}"
 export CFLAGS="${CFLAGS} -I${CLIBS_PREFIX}/include -D_WASI_EMULATED_PROCESS_CLOCKS"
 export CXXFLAGS="${CXXFLAGS} -I${CLIBS_PREFIX}/include -D_WASI_EMULATED_PROCESS_CLOCKS"
-# meson appends env LDFLAGS after the object files, so these -l libs are pulled
-# in only for the extensions that reference them: -lsetjmp for ft2font (freetype
-# setjmp; keeps the dangling wasm EH tag out of the others, which eryx can't
-# parse), -lwasi-emulated-process-clocks for qhull (clock()).
-export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib -lsetjmp -lwasi-emulated-process-clocks"
+# qhull calls clock(); it's a strong symbol so a global lib resolves it (pulled
+# only where referenced). libsetjmp is whole-archived per-extension in meson.build
+# below (its __c_longjmp is a weak EH tag a plain -l can't pull).
+export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib -lwasi-emulated-process-clocks"
 
 fetch_sdist "${MATPLOTLIB_URL}" "${HERE}/src"
 
@@ -37,9 +36,10 @@ fetch_sdist "${MATPLOTLIB_URL}" "${HERE}/src"
 #  - neutralise threading.Timer in font_manager (no threads under wasi)
 #  - drop the freetype2 pkg-config version constraint so the CMake-built
 #    freetype2.pc (release-numbered, not libtool-numbered) is accepted
-python3 - "${HERE}/src" <<'PY'
+python3 - "${HERE}/src" "${SJLJ_LIB}" <<'PY'
 import re, sys, pathlib
 root = pathlib.Path(sys.argv[1])
+sjlj = sys.argv[2]
 
 fm = root / "lib" / "matplotlib" / "font_manager.py"
 s = fm.read_text()
@@ -71,6 +71,29 @@ for old, new in (
     if new not in a:
         a = a.replace(old, new)
 agg.write_text(a)
+
+# Whole-archive libsetjmp into only the freetype-using extensions (_backend_agg,
+# ft2font) so freetype's setjmp (__c_longjmp, a weak EH tag) resolves without
+# leaving a dangling tag in the others.
+mb = root / "src" / "meson.build"
+m = mb.read_text()
+if "whole-archive" not in m:
+    link_args = (
+        "    'link_args': ([\'_backend_agg\', \'ft2font\'].contains(ext) ? "
+        "[\'-Wl,--whole-archive\', \'%s\', \'-Wl,--no-whole-archive\'] : []) "
+        "+ kwargs.get(\'link_args\', []),\n" % sjlj
+    )
+    m = m.replace(
+        "  additions = {\n"
+        "    'cpp_args': [new_preprocessor] + kwargs.get('cpp_args', []),\n"
+        "  }",
+        "  additions = {\n"
+        "    'cpp_args': [new_preprocessor] + kwargs.get('cpp_args', []),\n"
+        + link_args +
+        "  }",
+        1,
+    )
+    mb.write_text(m)
 PY
 
 if [ ! -e "${HERE}/venv" ]; then
