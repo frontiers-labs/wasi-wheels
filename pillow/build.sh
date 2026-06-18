@@ -36,7 +36,7 @@ if [ ! -e "${HERE}/venv" ]; then
   python3.14 -m venv "${HERE}/venv"
 fi
 . "${HERE}/venv/bin/activate"
-pip install --upgrade pip setuptools wheel
+pip install --upgrade pip setuptools wheel "pybind11>=2.13.2"
 
 enable_cross_python
 

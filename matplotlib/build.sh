@@ -62,7 +62,10 @@ if [ ! -e "${HERE}/venv" ]; then
 fi
 . "${HERE}/venv/bin/activate"
 pip install --upgrade pip
-pip install "meson-python>=0.13.1" "meson>=1.2.0,<2" ninja "pybind11>=2.13.2" wheel numpy
+pip install "meson-python>=0.13.1" "meson>=1.2.0,<2" ninja "pybind11>=2.13.2" wheel numpy setuptools_scm
+
+# sdist has no git metadata; pin the version for setuptools_scm.
+export SETUPTOOLS_SCM_PRETEND_VERSION="${MATPLOTLIB_VERSION}"
 
 enable_cross_python
 

@@ -25,6 +25,22 @@ fi
 
 fetch_sdist "${PANDAS_URL}" "${HERE}/src"
 
+# eryx's wasi CPython has no _ctypes (libffi). pandas imports ctypes at the top
+# of pandas/errors (on the `import pandas` path) but only uses it for a
+# Windows-only error message, so make the import lazy.
+python3 - "${HERE}/src" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]) / "pandas" / "errors" / "__init__.py"
+s = p.read_text()
+if "no _ctypes on wasi" not in s:
+    s = s.replace(
+        "import ctypes\n",
+        "try:\n    import ctypes\nexcept ImportError:  # no _ctypes on wasi\n    ctypes = None\n",
+        1,
+    )
+    p.write_text(s)
+PY
+
 if [ ! -e "${HERE}/venv" ]; then
   python3.14 -m venv "${HERE}/venv"
 fi
