@@ -29,8 +29,9 @@ set(CMAKE_NM "${_wasi_sdk}/bin/llvm-nm")
 # -fPIC: every archive is linked into a shared (.so) Python extension.
 # nosjlj.h: replace <setjmp.h> with trapping stubs so freetype/libjpeg/qhull do
 # not emit a wasm exception tag (which eryx's component encoder cannot link).
+# wasi-dup.h: stub dup(), which wasi-libc lacks but libxml2's xmlIO.c references.
 set(_wasi_dir "${CMAKE_CURRENT_LIST_DIR}")
-set(_wasi_cflags "-fPIC -O2 -include ${_wasi_dir}/nosjlj.h")
+set(_wasi_cflags "-fPIC -O2 -include ${_wasi_dir}/nosjlj.h -include ${_wasi_dir}/wasi-dup.h")
 set(CMAKE_C_FLAGS_INIT "${_wasi_cflags}")
 set(CMAKE_CXX_FLAGS_INIT "${_wasi_cflags}")
 
