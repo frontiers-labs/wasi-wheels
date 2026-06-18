@@ -28,9 +28,6 @@
 [submodule "sqlalchemy/src"]
 	path = sqlalchemy/src
 	url = https://github.com/sqlalchemy/sqlalchemy/
-[submodule "pandas/src"]
-	path = pandas/src
-	url = https://github.com/pandas-dev/pandas
 [submodule "multidict/src"]
 	path = multidict/src
 	url = https://github.com/aio-libs/multidict

@@ -1,4 +1,4 @@
-name: Build numpy wasi wheel
+name: Build pandas wasi wheel
 
 on:
   workflow_dispatch:
@@ -11,6 +11,14 @@ on:
         description: AOT CPU target
         required: false
         default: x86-64-v2
+  push:
+    branches:
+      - claude/python-sandbox-wasi-wheels-gabg3l
+    paths:
+      - pandas/**
+      - scripts/**
+      - Makefile
+      - .github/workflows/build-pandas.yml
 
 permissions:
   contents: read
@@ -22,9 +30,9 @@ env:
 
 jobs:
   build:
-    name: Build + runtime-test numpy
+    name: Build + runtime-test pandas
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -32,8 +40,6 @@ jobs:
           submodules: false
           persist-credentials: false
 
-      # Init only the submodules we need. numpy/src is recursive because
-      # meson/highway/pocketfft/... are nested submodules.
       - name: Init submodules
         run: |
           git submodule update --init cpython
@@ -46,8 +52,7 @@ jobs:
 
       - name: Capture toolchain cache key
         id: cachekey
-        run: |
-          echo "cpython_sha=$(git -C cpython rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: echo "cpython_sha=$(git -C cpython rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Cache wasi-sdk + cpython build
         id: toolchain-cache
@@ -62,25 +67,21 @@ jobs:
         if: steps.toolchain-cache.outputs.cache-hit != 'true'
         run: make -j"$(nproc)" "$(pwd)/cpython/builddir/wasi/install"
 
-      - name: Build numpy wasi wheel
-        run: make -j"$(nproc)" "$(pwd)/build/numpy-wasi.tar.gz"
+      - name: Build pandas wasi wheel (builds numpy first)
+        run: make -j"$(nproc)" "$(pwd)/build/pandas-wasi.tar.gz"
 
-      - name: Inspect numpy tarball
-        id: inspect
+      - name: Inspect tarballs
         run: |
-          ls -lh build/numpy-wasi.tar.gz
-          tar tzf build/numpy-wasi.tar.gz | grep -E "version.py$|\.so$" | head -20
-          # Extract numpy version from the built wheel filename (e.g. numpy-2.4.4-...).
-          wheel=$(ls numpy/src/wheels/numpy-*.whl | head -1)
-          version=$(basename "$wheel" | sed -E 's|^numpy-([^-]+)-.*|\1|')
-          echo "numpy_version=${version}" >> "$GITHUB_OUTPUT"
-          echo "numpy version: ${version}"
+          ls -lh build/pandas-wasi.tar.gz build/numpy-wasi.tar.gz
+          tar tzf build/pandas-wasi.tar.gz | grep -E "\.so$" | head
 
-      - name: Upload numpy artifact
+      - name: Upload pandas artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: numpy-${{ steps.inspect.outputs.numpy_version }}-wasi
-          path: build/numpy-wasi.tar.gz
+          name: pandas-wasi
+          path: |
+            build/pandas-wasi.tar.gz
+            build/numpy-wasi.tar.gz
 
       - name: Install eryx-precompile
         run: |
@@ -96,17 +97,23 @@ jobs:
           curl -fSL -o runtime.wasm "${ERYX_DEMO_ASSETS}/runtime.wasm"
           curl -fSL -o python-stdlib.tar.zst "${ERYX_DEMO_ASSETS}/python-stdlib.tar.zst"
           tar --zstd -xf python-stdlib.tar.zst
-          ls -lh
 
-      - name: Runtime-test numpy via eryx-precompile
+      - name: Vendor pure-Python runtime deps into stdlib
+        run: |
+          cd eryx-test
+          python -m pip download --no-deps --dest wheels \
+            python-dateutil six pytz tzdata
+          for whl in wheels/*.whl; do unzip -q -o "$whl" -d python-stdlib; done
+
+      - name: Runtime-test pandas via eryx-precompile
         run: |
           eryx-precompile compile eryx-test/runtime.wasm \
-            -o eryx-test/numpy-test.cwasm \
+            -o eryx-test/pandas-test.cwasm \
             --preinit \
             --stdlib eryx-test/python-stdlib \
             --package build/numpy-wasi.tar.gz \
+            --package build/pandas-wasi.tar.gz \
             --import numpy \
-            --import numpy.fft \
-            --import numpy.linalg \
+            --import pandas \
             --target "${CPU_TARGET}" \
-            --verify-code "import numpy as np, numpy.fft, numpy.linalg; print('numpy', np.__version__); print('sum', int(np.arange(10).sum())); print('det', round(float(np.linalg.det([[1.,2.],[3.,4.]])), 2)); print('fft', round(float(np.fft.fft([1.,2.,3.,4.])[0].real), 2))"
+            --verify-code "import pandas as pd, numpy as np; print('pandas', pd.__version__); df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}); print('sum', int(df.to_numpy().sum())); print('mean_a', float(df['a'].mean()))"
