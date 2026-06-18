@@ -102,5 +102,8 @@ jobs:
             --stdlib eryx-test/python-stdlib \
             --package build/pillow-wasi.tar.gz \
             --import PIL.Image \
+            --import PIL.ImageFile \
+            --import PIL.PngImagePlugin \
+            --import PIL.JpegImagePlugin \
             --target "${CPU_TARGET}" \
             --verify-code "import io; from PIL import Image; im = Image.new('RGB', (16, 16), (200, 50, 25)); buf = io.BytesIO(); im.save(buf, 'PNG'); buf.seek(0); im2 = Image.open(buf); im2.load(); print('pillow', Image.__version__ if hasattr(Image,'__version__') else 'ok'); print('size', im2.size); print('pixel', im2.getpixel((0, 0)))"

@@ -121,8 +121,10 @@ unpack_wheel() {
   # $1 = directory containing exactly one built wheel
   local wheel dest
   wheel=$(ls "$1"/*.whl | head -1)
+  # Drop setuptools' intermediate build/lib.<hostplat> so the Makefile's
+  # build/lib.*/<module> glob matches only the wheel contents (complete .py+.so).
+  rm -rf build/lib.*
   dest="build/lib.wasi-wasm32-${PY_VER}"
-  rm -rf "${dest}"
   mkdir -p "${dest}"
   unzip -q -o "${wheel}" -d "${dest}"
   echo "${wheel}"
