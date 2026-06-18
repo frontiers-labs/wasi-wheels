@@ -16,7 +16,7 @@ PILLOW_URL="https://files.pythonhosted.org/packages/source/p/pillow/pillow-${PIL
 # Build the C libraries first, with a clean environment: the Python-extension
 # CFLAGS/LDFLAGS (-shared, libpython) must not leak into their CMake builds.
 export CLIBS_PREFIX="${REPO}/build/clibs"
-CLIBS="zlib libjpeg freetype" bash "${REPO}/scripts/build-clibs.sh"
+CLIBS="zlib libjpeg" bash "${REPO}/scripts/build-clibs.sh"
 
 . "${REPO}/scripts/wasi-pybuild.sh"
 
@@ -73,7 +73,7 @@ rm -rf build wheels
 mkdir -p wheels
 pip wheel . -w wheels -v --no-build-isolation --no-deps \
   -C platform-guessing=disable \
-  -C zlib=enable -C jpeg=enable -C freetype=enable \
+  -C zlib=enable -C jpeg=enable -C freetype=disable \
   -C tiff=disable -C webp=disable -C lcms=disable -C xcb=disable \
   -C jpeg2000=disable -C imagequant=disable -C avif=disable -C raqm=disable
 
