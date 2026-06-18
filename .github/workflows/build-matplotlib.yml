@@ -95,6 +95,8 @@ jobs:
           tar tzf build/matplotlib-wasi.tar.gz | grep -cE "mpl-data/fonts/ttf/.*\.ttf$" || true
           echo "sample ttf entries:"
           tar tzf build/matplotlib-wasi.tar.gz | grep -E "mpl-data/fonts/ttf/.*\.ttf$" | head || true
+          echo "wasi font index entry:"
+          tar tzf build/matplotlib-wasi.tar.gz | grep "_wasi_index.txt" || true
 
       - name: Upload matplotlib artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -129,6 +131,37 @@ jobs:
             cycler fonttools packaging pyparsing python-dateutil six
           for whl in wheels/*.whl; do unzip -q -o "$whl" -d python-stdlib; done
 
+      - name: Write matplotlib verify script
+        run: |
+          printf '%s\n' \
+            "import os, io, traceback" \
+            "os.environ['MPLBACKEND'] = 'Agg'" \
+            "os.environ.setdefault('MPLCONFIGDIR', '/tmp')" \
+            "import matplotlib" \
+            "from matplotlib import font_manager as fmod" \
+            "dp = str(matplotlib.get_data_path())" \
+            "idx = os.path.join(dp, 'fonts', '_wasi_index.txt')" \
+            "print('DIAG idx', idx, 'exists', os.path.exists(idx))" \
+            "try:" \
+            "    print('DIAG idx_firstline', repr(open(idx).readline()))" \
+            "except Exception as e:" \
+            "    print('DIAG idx_open_err', repr(e))" \
+            "one = os.path.join(dp, 'fonts', 'ttf', 'DejaVuSans.ttf')" \
+            "print('DIAG font_exists', os.path.exists(one))" \
+            "import matplotlib.ft2font as ft" \
+            "try:" \
+            "    f = ft.FT2Font(one); print('DIAG ft2font_path_ok', f.family_name)" \
+            "except Exception:" \
+            "    print('DIAG ft2font_path_err'); traceback.print_exc()" \
+            "try:" \
+            "    fh = open(one, 'rb'); f = ft.FT2Font(fh); print('DIAG ft2font_bytes_ok', f.family_name)" \
+            "except Exception:" \
+            "    print('DIAG ft2font_bytes_err'); traceback.print_exc()" \
+            "print('DIAG ttflist', len(fmod.fontManager.ttflist))" \
+            "print('DIAG DONE')" \
+            > eryx-test/verify_mpl.py
+          echo '--- verify_mpl.py ---'; cat eryx-test/verify_mpl.py
+
       - name: Runtime-test matplotlib via eryx-precompile
         run: |
           eryx-precompile compile eryx-test/runtime.wasm \
@@ -147,4 +180,4 @@ jobs:
             --import matplotlib.pyplot \
             --import matplotlib.backends.backend_agg \
             --target "${CPU_TARGET}" \
-            --verify-code "import os; os.environ['MPLBACKEND']='Agg'; os.environ.setdefault('MPLCONFIGDIR','/tmp'); import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt, io; print('matplotlib', matplotlib.__version__); fig, ax = plt.subplots(); ax.plot([0,1,2,3],[0,1,4,9]); buf = io.BytesIO(); fig.savefig(buf, format='png'); data = buf.getvalue(); print('png_bytes', len(data)); assert data[:8] == b'\\x89PNG\\r\\n\\x1a\\n', 'bad png signature'; print('png_ok')"
+            --verify-code "$(cat eryx-test/verify_mpl.py)"
