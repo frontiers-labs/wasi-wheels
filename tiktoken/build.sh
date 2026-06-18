@@ -32,7 +32,7 @@ export AR="${WASI_SDK_PATH}/bin/ar"
 export RANLIB=true
 export LDFLAGS="-shared"
 export _PYTHON_SYSCONFIGDATA_NAME=_sysconfigdata_${ARCH_TRIPLET}
-export CARGO_BUILD_TARGET=wasm32-wasi
+export CARGO_BUILD_TARGET=wasm32-wasip1
 
 cargo="$(<src/Cargo.toml sed -e '/pyo3 =/s/features = \[.*\]/features = ["generate-import-lib", "extension-module"]/g')"
 echo "$cargo" >src/Cargo.toml
