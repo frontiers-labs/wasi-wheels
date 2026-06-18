@@ -69,13 +69,16 @@ jobs:
         if: steps.toolchain-cache.outputs.cache-hit != 'true'
         run: make -j"$(nproc)" "$(pwd)/cpython/builddir/wasi/install"
 
-      - name: Build matplotlib stack (numpy, contourpy, kiwisolver, matplotlib)
-        run: |
-          make -j"$(nproc)" \
-            "$(pwd)/build/numpy-wasi.tar.gz" \
-            "$(pwd)/build/contourpy-wasi.tar.gz" \
-            "$(pwd)/build/kiwisolver-wasi.tar.gz" \
-            "$(pwd)/build/matplotlib-wasi.tar.gz"
+      # Built sequentially (each target still parallelises internally) so a
+      # failure points at one package instead of interleaving across them.
+      - name: Build numpy
+        run: make -j"$(nproc)" "$(pwd)/build/numpy-wasi.tar.gz"
+      - name: Build contourpy
+        run: make -j"$(nproc)" "$(pwd)/build/contourpy-wasi.tar.gz"
+      - name: Build kiwisolver
+        run: make -j"$(nproc)" "$(pwd)/build/kiwisolver-wasi.tar.gz"
+      - name: Build matplotlib
+        run: make -j"$(nproc)" "$(pwd)/build/matplotlib-wasi.tar.gz"
 
       - name: Inspect tarballs
         run: |

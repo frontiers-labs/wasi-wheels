@@ -79,9 +79,22 @@ build_libjpeg() {
   local t="${WORK}/libjpeg-turbo-${LIBJPEG_VERSION}.tar.gz"
   fetch "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${LIBJPEG_VERSION}/libjpeg-turbo-${LIBJPEG_VERSION}.tar.gz" "${t}" ""
   tar -C "${WORK}" -xf "${t}"
-  cmake_build "${WORK}/libjpeg-turbo-${LIBJPEG_VERSION}" \
+  local src="${WORK}/libjpeg-turbo-${LIBJPEG_VERSION}"
+  mkdir -p "${PREFIX}/lib" "${PREFIX}/include"
+  rm -rf "${src}/build-wasi"
+  cmake -S "${src}" -B "${src}/build-wasi" -G "Unix Makefiles" \
+    -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DENABLE_SHARED=OFF -DENABLE_STATIC=ON \
     -DWITH_SIMD=OFF -DWITH_TURBOJPEG=OFF
+  # Build only the static library. The bundled cjpeg/djpeg/example executables
+  # link full programs that need the wasm SjLj runtime symbol (__c_longjmp) and
+  # fail; we only need libjpeg.a + its headers, which Pillow finds via JPEG_ROOT.
+  cmake --build "${src}/build-wasi" --target jpeg-static -j"$(nproc)"
+  cp -f "${src}/build-wasi/libjpeg.a" "${PREFIX}/lib/"
+  cp -f "${src}/build-wasi/jconfig.h" "${PREFIX}/include/"
+  cp -f "${src}/jpeglib.h" "${src}/jmorecfg.h" "${src}/jerror.h" "${PREFIX}/include/"
 }
 
 build_libpng() {

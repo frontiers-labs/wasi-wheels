@@ -25,7 +25,9 @@ export PKG_CONFIG_PATH="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgc
 export PKG_CONFIG_LIBDIR="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgconfig:${PKG_CONFIG_LIBDIR}"
 export CFLAGS="${CFLAGS} -I${CLIBS_PREFIX}/include"
 export CXXFLAGS="${CXXFLAGS} -I${CLIBS_PREFIX}/include"
-export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib"
+# -lsetjmp provides the wasm SjLj runtime (__c_longjmp) freetype's rasterizer
+# needs once linked into matplotlib's ft2font extension.
+export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib -lsetjmp"
 
 fetch_sdist "${MATPLOTLIB_URL}" "${HERE}/src"
 

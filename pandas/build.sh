@@ -30,7 +30,8 @@ if [ ! -e "${HERE}/venv" ]; then
 fi
 . "${HERE}/venv/bin/activate"
 pip install --upgrade pip
-pip install "meson-python>=0.16.0" "meson>=1.3.0,<2" "Cython>=3.0.6,<4" ninja wheel "numpy==${NUMPY_VERSION}"
+pip install "meson-python>=0.16.0" "meson>=1.3.0,<2" "Cython>=3.0.6,<4" ninja wheel \
+  "versioneer[toml]" "numpy==${NUMPY_VERSION}"
 
 HOST_NP_INC=$(python -c "import numpy; print(numpy.get_include())")
 cp -f "${NUMPY_TARGET_INC}/_numpyconfig.h" "${HOST_NP_INC}/numpy/"
