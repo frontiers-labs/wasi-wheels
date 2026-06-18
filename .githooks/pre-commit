@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# Cross-build the wasm32-wasip2 C libraries when a build input is staged, so
+# clib/toolchain regressions are caught locally instead of in CI. Fast no-op for
+# commits that don't touch those files. Bypass with `git commit --no-verify`.
+#
+# Enable once per clone: `make install-hooks` (sets core.hooksPath=.githooks).
+
+set -euo pipefail
+
+REPO=$(git rev-parse --show-toplevel)
+
+# Files whose changes can break the clib cross-build.
+trigger='^(scripts/build-clibs\.sh|scripts/check-clibs\.sh|scripts/wasi-toolchain\.cmake|scripts/nosjlj\.h|scripts/wasi-dup\.h|lxml/build\.sh)$'
+
+if git diff --cached --name-only --diff-filter=ACMR | grep -Eq "${trigger}"; then
+  echo "[pre-commit] clib build inputs changed; verifying wasm32-wasip2 clib build..."
+  bash "${REPO}/scripts/check-clibs.sh"
+else
+  echo "[pre-commit] no clib build inputs staged; skipping clib check."
+fi

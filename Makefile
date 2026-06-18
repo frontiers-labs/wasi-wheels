@@ -203,6 +203,17 @@ $(CPYTHON): $(WASI_SDK)
 		-lwasi-emulated-process-clocks \
 		-ldl)
 
+.PHONY: install-hooks
+install-hooks:
+	git config core.hooksPath .githooks
+	@echo "git hooks enabled (core.hooksPath=.githooks)"
+
+# Cross-build just the C libraries (no CPython needed). Used by the pre-commit
+# hook; also handy on its own.
+.PHONY: check-clibs
+check-clibs:
+	bash scripts/check-clibs.sh
+
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR) cpython/builddir numpy/numpy/build
