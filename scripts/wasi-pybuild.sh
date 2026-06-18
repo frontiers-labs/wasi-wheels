@@ -46,6 +46,30 @@ enable_cross_python() {
   done
   export _PYTHON_SYSCONFIGDATA_NAME="_sysconfigdata_${ARCH_TRIPLET}"
   export PYTHONPATH="${CROSS_PREFIX}/lib/python${PY_VER}"
+  patch_meson_no_groups
+}
+
+# wasm-ld rejects --start-group/--end-group, which the stock pip meson wraps
+# around link archives. numpy uses a patched vendored meson; for the pip meson
+# in our build venvs, disable the group insertion directly. No-op when meson is
+# not installed (setuptools-only packages).
+patch_meson_no_groups() {
+  local f
+  f="$(python3 -c 'import mesonbuild.compilers.mixins.clike as m; print(m.__file__)' 2>/dev/null || true)"
+  [ -n "${f}" ] && [ -f "${f}" ] || return 0
+  python3 - "${f}" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+needle = "if group_end > group_start >= 0:"
+if needle in s and "wasi: wasm-ld lacks --start-group" not in s:
+    s = s.replace(
+        needle,
+        "if False and group_end > group_start >= 0:  # wasi: wasm-ld lacks --start-group",
+        1,
+    )
+    p.write_text(s)
+PY
 }
 
 # Compile the C++ exception ABI stubs once; link into every extension.
@@ -54,14 +78,14 @@ CXA_STUB_OBJ="${WASI_SCRIPTS}/cxa_stubs.o"
 
 # setjmp/longjmp lowering must match the C libraries (freetype/libjpeg use it).
 SJLJ="-mllvm -wasm-enable-sjlj"
-# The wasm SjLj runtime helper __c_longjmp lives in clang's compiler-rt
-# builtins, which isn't auto-linked into our -shared extensions and isn't
-# exported by libpython.so. Link it explicitly so freetype/libjpeg setjmp
-# users resolve.
-CRT_BUILTINS="$(${CC} --target=${TARGET} --print-libgcc-file-name 2>/dev/null || true)"
+# The wasm SjLj runtime (__c_longjmp, __wasm_setjmp/longjmp) lives in wasi-sdk's
+# libsetjmp.a. Packages that use setjmp link it with --whole-archive (below);
+# plain -lsetjmp resolves too late under setuptools, which puts LDFLAGS before
+# the object files.
+export SJLJ_LIB="${WASI_SDK_PATH}/share/wasi-sysroot/lib/${TARGET}/libsetjmp.a"
 export CFLAGS="--target=${TARGET} -fPIC ${SJLJ} -I${CROSS_PREFIX}/include/python${PY_VER} -D__EMSCRIPTEN__=1"
 export CXXFLAGS="--target=${TARGET} -fPIC ${SJLJ} -I${CROSS_PREFIX}/include/python${PY_VER}"
-export LDFLAGS="--target=${TARGET} -shared ${CROSS_PREFIX}/lib/libpython${PY_VER}.so ${CXA_STUB_OBJ} ${CRT_BUILTINS}"
+export LDFLAGS="--target=${TARGET} -shared ${CROSS_PREFIX}/lib/libpython${PY_VER}.so ${CXA_STUB_OBJ}"
 
 # pkg-config: cpython first; package scripts prepend their C-lib prefix.
 export PKG_CONFIG_LIBDIR="${CROSS_PREFIX}/lib/pkgconfig"

@@ -26,9 +26,9 @@ export ZLIB_ROOT="${CLIBS_PREFIX}"
 export JPEG_ROOT="${CLIBS_PREFIX}"
 export FREETYPE_ROOT="${CLIBS_PREFIX}"
 export CFLAGS="${CFLAGS} -I${CLIBS_PREFIX}/include"
-# -lsetjmp provides the wasm SjLj runtime (__c_longjmp) that libjpeg's error
-# handling needs once linked into Pillow's extension.
-export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib -lsetjmp"
+# Whole-archive libsetjmp so libjpeg's setjmp (__c_longjmp) resolves regardless
+# of link order (setuptools places LDFLAGS before the object files).
+export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib -Wl,--whole-archive ${SJLJ_LIB} -Wl,--no-whole-archive"
 
 fetch_sdist "${PILLOW_URL}" "${HERE}/src"
 
