@@ -46,6 +46,15 @@ make build/matplotlib-wasi.tar.gz
 make build/lxml-wasi.tar.gz
 ```
 
+The release also ships the interpreter the wheels run on as
+`cpython-wasi.tar.gz`: the cross-built CPython 3.14 shared library
+(`libpython3.14.so`), headers and the full standard library (including
+`lib-dynload` extension modules and the wasm sysconfigdata). Build it with:
+
+```bash
+make build/cpython-wasi.tar.gz
+```
+
 ### Known limitations
 
 wasi-sdk on `wasm32-wasip2` cannot unwind C++ exceptions; throwing aborts (see
