@@ -26,37 +26,38 @@ fi
 fetch_sdist "${PANDAS_URL}" "${HERE}/src"
 
 # eryx's wasi CPython lacks _ctypes (libffi) and mmap (no mmap syscall), which
-# pandas hard-imports on the `import pandas` path. Both are only used in
-# rarely-hit paths (a Windows error message; memory-mapped file reads), so
-# guard the imports. The mmap stub keeps isinstance() checks working.
+# pandas hard-imports at module load in several files on the `import pandas`
+# path (errors, the dataframe-interchange module, io.common, ...). All uses are
+# inside functions (Windows error text, interchange buffers, memory-mapped
+# reads), so guard every top-level import across the non-test tree. The mmap
+# stub keeps isinstance() checks working.
 python3 - "${HERE}/src" <<'PY'
-import pathlib, sys
-root = pathlib.Path(sys.argv[1])
+import pathlib, re, sys
+root = pathlib.Path(sys.argv[1]) / "pandas"
 
-p = root / "pandas" / "errors" / "__init__.py"
-s = p.read_text()
-if "no _ctypes on wasi" not in s:
-    s = s.replace(
-        "import ctypes\n",
-        "try:\n    import ctypes\nexcept ImportError:  # no _ctypes on wasi\n    ctypes = None\n",
-        1,
-    )
-    p.write_text(s)
+ctypes_guard = (
+    "try:\n    import ctypes\n"
+    "except ImportError:  # no _ctypes on wasi\n    ctypes = None"
+)
+mmap_guard = (
+    "try:\n    import mmap\n"
+    "except ImportError:  # no mmap on wasi\n"
+    "    import types as _t\n"
+    "    class _UnavailableMmap:  # placeholder for isinstance checks\n"
+    "        pass\n"
+    "    mmap = _t.SimpleNamespace(mmap=_UnavailableMmap, ACCESS_READ=0)"
+)
 
-c = root / "pandas" / "io" / "common.py"
-s = c.read_text()
-if "no mmap on wasi" not in s:
-    s = s.replace(
-        "import mmap\n",
-        "try:\n    import mmap\n"
-        "except ImportError:  # no mmap on wasi\n"
-        "    import types as _t\n"
-        "    class _UnavailableMmap:  # placeholder for isinstance checks\n"
-        "        pass\n"
-        "    mmap = _t.SimpleNamespace(mmap=_UnavailableMmap, ACCESS_READ=0)\n",
-        1,
-    )
-    c.write_text(s)
+for f in root.rglob("*.py"):
+    if "tests" in f.parts:
+        continue
+    s = orig = f.read_text()
+    if "no _ctypes on wasi" not in s:
+        s = re.sub(r"(?m)^import ctypes$", ctypes_guard, s)
+    if "no mmap on wasi" not in s:
+        s = re.sub(r"(?m)^import mmap$", mmap_guard, s)
+    if s != orig:
+        f.write_text(s)
 PY
 
 if [ ! -e "${HERE}/venv" ]; then

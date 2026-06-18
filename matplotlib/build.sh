@@ -55,6 +55,20 @@ e = ext.read_text()
 e2 = re.sub(r"dependency\('freetype2'[^)]*\)", "dependency('freetype2')", e)
 if e2 != e:
     ext.write_text(e2)
+
+# wasm32 is ILP32: get_height()/get_width() return unsigned int, which narrows
+# to py::ssize_t (long) in the Agg buffer initializer list (-Wc++11-narrowing
+# is a hard error). Add explicit casts (matplotlib upstream patch 0004).
+agg = root / "src" / "_backend_agg_wrapper.cpp"
+a = agg.read_text()
+for old, new in (
+    ("renderer->get_height(),", "static_cast<py::ssize_t>(renderer->get_height()),"),
+    ("renderer->get_width() * 4,", "static_cast<py::ssize_t>(renderer->get_width() * 4),"),
+    ("renderer->get_width(),", "static_cast<py::ssize_t>(renderer->get_width()),"),
+):
+    if new not in a:
+        a = a.replace(old, new)
+agg.write_text(a)
 PY
 
 if [ ! -e "${HERE}/venv" ]; then

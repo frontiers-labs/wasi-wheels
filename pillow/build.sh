@@ -32,6 +32,20 @@ export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib -Wl,--whole-archive ${SJLJ_LIB}
 
 fetch_sdist "${PILLOW_URL}" "${HERE}/src"
 
+# Drop the Tkinter extension: it dlopen()s Tk (no dlopen on wasi) and a headless
+# sandbox has no use for it. Reuse Pillow's own _remove_extension mechanism.
+python3 - "${HERE}/src" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]) / "setup.py"
+s = p.read_text()
+s = s.replace(
+    'self._update_extension("PIL._imagingtk", tk_libs)',
+    'self._remove_extension("PIL._imagingtk")',
+    1,
+)
+p.write_text(s)
+PY
+
 if [ ! -e "${HERE}/venv" ]; then
   python3.14 -m venv "${HERE}/venv"
 fi
