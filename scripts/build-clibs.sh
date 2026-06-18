@@ -94,7 +94,7 @@ build_libjpeg() {
   cmake --build "${src}/build-wasi" --target jpeg-static -j"$(nproc)"
   cp -f "${src}/build-wasi/libjpeg.a" "${PREFIX}/lib/"
   cp -f "${src}/build-wasi/jconfig.h" "${PREFIX}/include/"
-  cp -f "${src}/jpeglib.h" "${src}/jmorecfg.h" "${src}/jerror.h" "${PREFIX}/include/"
+  cp -f "${src}/src/jpeglib.h" "${src}/src/jmorecfg.h" "${src}/src/jerror.h" "${PREFIX}/include/"
 }
 
 build_libpng() {

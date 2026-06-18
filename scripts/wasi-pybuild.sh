@@ -29,7 +29,21 @@ export WASI_WHEELS_NO_LINK_GROUPS=1
 # not at source time: doing it before `python -m venv` runs makes host
 # ensurepip load the wasm sysconfigdata and fail. Call after venv + host pip
 # installs, right before the cross build.
+#
+# meson and setuptools both add the host interpreter's include dir (derived
+# from the install scheme, which sysconfigdata cannot override) ahead of our
+# cross include, so a wasm build would compile against the 64-bit pyconfig.h
+# and fail (LONG_BIT / immortal-refcount shift). Overlay the cross CPython
+# headers onto the host include dir so whichever path wins is wasm-correct.
+# Query the host paths before exporting the wasm sysconfig name.
 enable_cross_python() {
+  local d
+  for d in "$(python3 -c 'import sysconfig; print(sysconfig.get_path("platinclude"))')" \
+           "$(python3 -c 'import sysconfig; print(sysconfig.get_path("include"))')"; do
+    if [ -n "${d}" ] && [ -d "${d}" ]; then
+      cp -rf "${CROSS_PREFIX}/include/python${PY_VER}/." "${d}/"
+    fi
+  done
   export _PYTHON_SYSCONFIGDATA_NAME="_sysconfigdata_${ARCH_TRIPLET}"
   export PYTHONPATH="${CROSS_PREFIX}/lib/python${PY_VER}"
 }
