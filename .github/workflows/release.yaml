@@ -68,10 +68,13 @@ jobs:
       - name: Build lxml
         run: make -j"$(nproc)" "$(pwd)/build/lxml-wasi.tar.gz"
 
-      # Package the cross CPython interpreter + stdlib so the release ships a
-      # complete WASI Python to load the wheels into (built above as $(CPYTHON)).
+      # Package the cross CPython interpreter and its standard library as two
+      # separate release artifacts (cpython-wasi.tar.gz + python-stdlib-wasi.tar.gz)
+      # so the release ships a complete WASI Python to load the wheels into.
       - name: Package cpython + stdlib
-        run: make -j"$(nproc)" "$(pwd)/build/cpython-wasi.tar.gz"
+        run: |
+          make -j"$(nproc)" "$(pwd)/build/cpython-wasi.tar.gz"
+          make -j"$(nproc)" "$(pwd)/build/python-stdlib-wasi.tar.gz"
 
       - name: Inspect release tarballs
         run: ls -lh build/*-wasi.tar.gz

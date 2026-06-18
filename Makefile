@@ -4,6 +4,7 @@ CPYTHON := $(abspath cpython/builddir/wasi/install)
 SYSCONFIG := $(abspath cpython/builddir/wasi/build/lib.wasi-wasm32-3.14)
 OUTPUTS := \
 	$(BUILD_DIR)/cpython-wasi.tar.gz \
+	$(BUILD_DIR)/python-stdlib-wasi.tar.gz \
 	$(BUILD_DIR)/aiohttp-wasi.tar.gz \
 	$(BUILD_DIR)/charset_normalizer-wasi.tar.gz \
 	$(BUILD_DIR)/frozenlist-wasi.tar.gz \
@@ -30,18 +31,27 @@ all: $(OUTPUTS)
 
 $(OUTPUTS): $(WASI_SDK) $(CPYTHON)
 
-# CPython runtime + standard library for wasm32-wasip2. Ships the cross
-# interpreter's shared lib (libpython3.14.so), headers and the full stdlib
-# (lib/python3.14, including lib-dynload extension modules and the wasm
-# sysconfigdata) so consumers have a complete WASI Python to load the wheels
-# into. Staged under a top-level cpython/ dir; the static libpython archive is
-# dropped (redundant with the .so and large).
+# CPython interpreter runtime for wasm32-wasip2: the cross-built shared lib
+# (libpython3.14.so), headers and bin/, minus the stdlib (shipped separately as
+# python-stdlib-wasi.tar.gz) and the redundant static archive. Staged under a
+# top-level cpython/ dir.
 $(BUILD_DIR)/cpython-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
 	@mkdir -p "$(@D)"
 	rm -rf "$(BUILD_DIR)/cpython"
 	cp -a "$(CPYTHON)/." "$(BUILD_DIR)/cpython/"
 	rm -f "$(BUILD_DIR)"/cpython/lib/libpython*.a
+	rm -rf "$(BUILD_DIR)/cpython/lib/python3.14"
 	(cd "$(BUILD_DIR)" && tar czf cpython-wasi.tar.gz cpython)
+
+# CPython standard library for wasm32-wasip2: the full stdlib tree
+# (lib/python3.14 — pure-Python modules, the lib-dynload extension .so's and the
+# wasm sysconfigdata). Standalone so it can be consumed on its own, e.g. fed to
+# eryx-precompile via --stdlib. Staged under a top-level python-stdlib/ dir.
+$(BUILD_DIR)/python-stdlib-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
+	@mkdir -p "$(@D)"
+	rm -rf "$(BUILD_DIR)/python-stdlib"
+	cp -a "$(CPYTHON)/lib/python3.14" "$(BUILD_DIR)/python-stdlib"
+	(cd "$(BUILD_DIR)" && tar czf python-stdlib-wasi.tar.gz python-stdlib)
 
 $(BUILD_DIR)/aiohttp-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
 	@mkdir -p "$(@D)"

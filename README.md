@@ -46,13 +46,19 @@ make build/matplotlib-wasi.tar.gz
 make build/lxml-wasi.tar.gz
 ```
 
-The release also ships the interpreter the wheels run on as
-`cpython-wasi.tar.gz`: the cross-built CPython 3.14 shared library
-(`libpython3.14.so`), headers and the full standard library (including
-`lib-dynload` extension modules and the wasm sysconfigdata). Build it with:
+The release also ships the interpreter the wheels run on, as two artifacts:
+
+- `cpython-wasi.tar.gz` — the cross-built CPython 3.14 runtime: the shared
+  library (`libpython3.14.so`), headers and `bin/`.
+- `python-stdlib-wasi.tar.gz` — the standard library tree (pure-Python modules,
+  the `lib-dynload` extension modules and the wasm sysconfigdata), standalone so
+  it can be fed to e.g. `eryx-precompile --stdlib`.
+
+Build them with:
 
 ```bash
 make build/cpython-wasi.tar.gz
+make build/python-stdlib-wasi.tar.gz
 ```
 
 ### Known limitations
