@@ -25,12 +25,15 @@ fi
 
 fetch_sdist "${PANDAS_URL}" "${HERE}/src"
 
-# eryx's wasi CPython has no _ctypes (libffi). pandas imports ctypes at the top
-# of pandas/errors (on the `import pandas` path) but only uses it for a
-# Windows-only error message, so make the import lazy.
+# eryx's wasi CPython lacks _ctypes (libffi) and mmap (no mmap syscall), which
+# pandas hard-imports on the `import pandas` path. Both are only used in
+# rarely-hit paths (a Windows error message; memory-mapped file reads), so
+# guard the imports. The mmap stub keeps isinstance() checks working.
 python3 - "${HERE}/src" <<'PY'
 import pathlib, sys
-p = pathlib.Path(sys.argv[1]) / "pandas" / "errors" / "__init__.py"
+root = pathlib.Path(sys.argv[1])
+
+p = root / "pandas" / "errors" / "__init__.py"
 s = p.read_text()
 if "no _ctypes on wasi" not in s:
     s = s.replace(
@@ -39,6 +42,21 @@ if "no _ctypes on wasi" not in s:
         1,
     )
     p.write_text(s)
+
+c = root / "pandas" / "io" / "common.py"
+s = c.read_text()
+if "no mmap on wasi" not in s:
+    s = s.replace(
+        "import mmap\n",
+        "try:\n    import mmap\n"
+        "except ImportError:  # no mmap on wasi\n"
+        "    import types as _t\n"
+        "    class _UnavailableMmap:  # placeholder for isinstance checks\n"
+        "        pass\n"
+        "    mmap = _t.SimpleNamespace(mmap=_UnavailableMmap, ACCESS_READ=0)\n",
+        1,
+    )
+    c.write_text(s)
 PY
 
 if [ ! -e "${HERE}/venv" ]; then
