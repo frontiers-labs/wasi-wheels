@@ -1,0 +1,130 @@
+name: Build matplotlib wasi wheel
+
+on:
+  workflow_dispatch:
+    inputs:
+      eryx_version:
+        description: eryx-precompile version to install
+        required: false
+        default: "0.4.9"
+      cpu_target:
+        description: AOT CPU target
+        required: false
+        default: x86-64-v2
+  push:
+    branches:
+      - claude/python-sandbox-wasi-wheels-gabg3l
+    paths:
+      - matplotlib/**
+      - contourpy/**
+      - kiwisolver/**
+      - scripts/**
+      - Makefile
+      - .github/workflows/build-matplotlib.yml
+
+permissions:
+  contents: read
+
+env:
+  ERYX_VERSION: ${{ inputs.eryx_version || '0.4.9' }}
+  CPU_TARGET: ${{ inputs.cpu_target || 'x86-64-v2' }}
+  ERYX_DEMO_ASSETS: https://github.com/eryx-org/eryx/releases/download/demo-assets
+
+jobs:
+  build:
+    name: Build + runtime-test matplotlib
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Init submodules
+        run: |
+          git submodule update --init cpython
+          git submodule update --init --recursive numpy/src
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.14"
+
+      - name: Capture toolchain cache key
+        id: cachekey
+        run: echo "cpython_sha=$(git -C cpython rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache wasi-sdk + cpython build
+        id: toolchain-cache
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: |
+            build/wasi-sdk
+            cpython/builddir
+          key: toolchain-${{ runner.os }}-${{ hashFiles('Makefile') }}-${{ steps.cachekey.outputs.cpython_sha }}
+
+      - name: Build wasi-sdk + cpython (cache miss)
+        if: steps.toolchain-cache.outputs.cache-hit != 'true'
+        run: make -j"$(nproc)" "$(pwd)/cpython/builddir/wasi/install"
+
+      - name: Build matplotlib stack (numpy, contourpy, kiwisolver, matplotlib)
+        run: |
+          make -j"$(nproc)" \
+            "$(pwd)/build/numpy-wasi.tar.gz" \
+            "$(pwd)/build/contourpy-wasi.tar.gz" \
+            "$(pwd)/build/kiwisolver-wasi.tar.gz" \
+            "$(pwd)/build/matplotlib-wasi.tar.gz"
+
+      - name: Inspect tarballs
+        run: |
+          ls -lh build/*-wasi.tar.gz
+          tar tzf build/matplotlib-wasi.tar.gz | grep -E "\.so$" | head
+
+      - name: Upload matplotlib artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: matplotlib-wasi
+          path: |
+            build/matplotlib-wasi.tar.gz
+            build/contourpy-wasi.tar.gz
+            build/kiwisolver-wasi.tar.gz
+            build/numpy-wasi.tar.gz
+
+      - name: Install eryx-precompile
+        run: |
+          curl -fSL -o eryx-precompile.tar.xz \
+            "https://github.com/eryx-org/eryx/releases/download/eryx-precompile-v${ERYX_VERSION}/eryx-precompile-x86_64-unknown-linux-gnu.tar.xz"
+          tar -xf eryx-precompile.tar.xz
+          sudo mv eryx-precompile-x86_64-unknown-linux-gnu/eryx-precompile /usr/local/bin/
+          eryx-precompile --version
+
+      - name: Download eryx demo assets (runtime + stdlib)
+        run: |
+          mkdir -p eryx-test && cd eryx-test
+          curl -fSL -o runtime.wasm "${ERYX_DEMO_ASSETS}/runtime.wasm"
+          curl -fSL -o python-stdlib.tar.zst "${ERYX_DEMO_ASSETS}/python-stdlib.tar.zst"
+          tar --zstd -xf python-stdlib.tar.zst
+
+      - name: Vendor pure-Python runtime deps into stdlib
+        run: |
+          cd eryx-test
+          python -m pip download --no-deps --dest wheels \
+            cycler fonttools packaging pyparsing python-dateutil six
+          for whl in wheels/*.whl; do unzip -q -o "$whl" -d python-stdlib; done
+
+      - name: Runtime-test matplotlib via eryx-precompile
+        run: |
+          eryx-precompile compile eryx-test/runtime.wasm \
+            -o eryx-test/matplotlib-test.cwasm \
+            --preinit \
+            --stdlib eryx-test/python-stdlib \
+            --package build/numpy-wasi.tar.gz \
+            --package build/kiwisolver-wasi.tar.gz \
+            --package build/contourpy-wasi.tar.gz \
+            --package build/matplotlib-wasi.tar.gz \
+            --import numpy \
+            --import matplotlib \
+            --target "${CPU_TARGET}" \
+            --verify-code "import os; os.environ['MPLBACKEND']='Agg'; os.environ.setdefault('MPLCONFIGDIR','/tmp'); import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt, io; print('matplotlib', matplotlib.__version__); fig, ax = plt.subplots(); ax.plot([0,1,2,3],[0,1,4,9]); buf = io.BytesIO(); fig.savefig(buf, format='png'); print('png_bytes', buf.tell())"

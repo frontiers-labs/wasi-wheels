@@ -1,60 +1,52 @@
 #!/bin/bash
+#
+# Cross-compile pandas for wasm32-wasip2 against the wasi numpy build.
+#
+# pandas' meson build resolves numpy headers via numpy.get_include() in the
+# build interpreter. We install a matching host numpy and overlay the wasm
+# target's _numpyconfig.h (wasm32 is ILP32, so the size macros differ) so the
+# Cython extensions are compiled with the correct ABI.
 
 set -eou pipefail
 
-if [ ! -e venv ]; then
-  python3.12 -m venv venv
+HERE=$(cd "$(dirname "$0")" && pwd)
+REPO=$(cd "${HERE}/.." && pwd)
+. "${REPO}/scripts/wasi-pybuild.sh"
+
+PANDAS_VERSION=2.3.3
+NUMPY_VERSION=2.4.4
+PANDAS_URL="https://files.pythonhosted.org/packages/source/p/pandas/pandas-${PANDAS_VERSION}.tar.gz"
+
+NUMPY_TARGET_INC="${REPO}/numpy/src/build/lib.wasi-wasm32-${PY_VER}/numpy/_core/include/numpy"
+if [ ! -e "${NUMPY_TARGET_INC}/_numpyconfig.h" ]; then
+  echo "cross-built numpy headers not found at ${NUMPY_TARGET_INC}; build numpy first" >&2
+  exit 1
 fi
 
-. venv/bin/activate
-pip install build wheel setuptools meson[ninja]==1.2.1 meson-python==0.13.1 versioneer[toml] 'numpy<2' Cython==3.0.5
+fetch_sdist "${PANDAS_URL}" "${HERE}/src"
 
-# Truly, the "Good Code"
-#
-# Turn off setjmp instructions because we don't have access to them under WASI.
-# Ideally we'd be compiling pandas' copy of numpy against the WASI numpy we've
-# already built, but it seems like pandas is set up to compile against a local,
-# import-able copy of numpy instead.
-cat >venv/lib/python3.12/site-packages/numpy/core/include/numpy/npy_interrupt.h <<'EOF'
+if [ ! -e "${HERE}/venv" ]; then
+  python3.14 -m venv "${HERE}/venv"
+fi
+. "${HERE}/venv/bin/activate"
+pip install --upgrade pip
+pip install "meson-python>=0.16.0" "meson>=1.3.0,<2" "Cython>=3.0.6,<4" ninja wheel "numpy==${NUMPY_VERSION}"
 
-#ifndef NUMPY_CORE_INCLUDE_NUMPY_NPY_INTERRUPT_H_
-#define NUMPY_CORE_INCLUDE_NUMPY_NPY_INTERRUPT_H_
+HOST_NP_INC=$(python -c "import numpy; print(numpy.get_include())")
+cp -f "${NUMPY_TARGET_INC}/_numpyconfig.h" "${HOST_NP_INC}/numpy/"
+cp -f "${NUMPY_TARGET_INC}/numpyconfig.h" "${HOST_NP_INC}/numpy/" 2>/dev/null || true
 
+# Catch implicit declarations: on wasm they silently produce wrong ABI.
+export CFLAGS="${CFLAGS} -Werror=implicit-function-declaration -Oz"
 
-#define NPY_SIGINT_ON
-#define NPY_SIGINT_OFF
+cd "${HERE}/src"
+CROSS_FILE="$(pwd)/build.meson.cross"
+write_cross_file "${CROSS_FILE}"
 
-#endif  /* NUMPY_CORE_INCLUDE_NUMPY_NPY_INTERRUPT_H_ */
-EOF
+rm -rf build wheels
+mkdir -p wheels
+pip wheel . -w wheels -v --no-build-isolation --no-deps \
+  -Csetup-args="--cross-file=${CROSS_FILE}" \
+  -Csetup-args="-Dbuildtype=release"
 
-
-# Patch numpy to add WASM support in the correct location
-# Search for the line 'define NPY_CPU_AMD64' and add wasm target to npy_cpu header
-# add wasm as a recognized cpu target in pandas' copy of numpy
-sed -i '/#define NPY_CPU_AMD64/a\
-#elif defined(__wasm__) || defined(__wasm32__)\
-    #define NPY_CPU_WASM' venv/lib/python3.12/site-packages/numpy/core/include/numpy/npy_cpu.h
-
-ARCH_TRIPLET=_wasi_wasm32-wasi
-
-export CC="${WASI_SDK_PATH}/bin/clang"
-export CXX="${WASI_SDK_PATH}/bin/clang++"
-
-export PYTHONPATH=$CROSS_PREFIX/lib/python3.12
-
-export CFLAGS="-I${CROSS_PREFIX}/include/python3.12 -D__EMSCRIPTEN__=1"
-export CXXFLAGS="-I${CROSS_PREFIX}/include/python3.12"
-export LDSHARED=${CC}
-export AR="${WASI_SDK_PATH}/bin/ar"
-export RANLIB=true
-export LDFLAGS="-shared"
-export _PYTHON_SYSCONFIGDATA_NAME=_sysconfigdata_${ARCH_TRIPLET}
-export NPY_DISABLE_SVML=1
-export NPY_BLAS_ORDER=
-export NPY_LAPACK_ORDER=
-export NPY_NO_SIGNAL=1
-export MACOSX_DEPLOYMENT_TARGET=3.11
-
-cd src
-python3 setup.py build -j 4
-# wheel unpack --dest build dist/*.whl 
+unpack_wheel wheels

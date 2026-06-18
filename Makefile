@@ -58,11 +58,42 @@ $(BUILD_DIR)/numpy-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
 	cp -a numpy/src/build/lib.*/numpy "$(@D)"
 	(cd "$(@D)" && tar czf numpy-wasi.tar.gz numpy)
 
-$(BUILD_DIR)/pandas-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
+# pandas compiles its Cython extensions against the wasi numpy headers, so the
+# numpy build must run first.
+$(BUILD_DIR)/pandas-wasi.tar.gz: $(WASI_SDK) $(CPYTHON) $(BUILD_DIR)/numpy-wasi.tar.gz
 	@mkdir -p "$(@D)"
 	(cd pandas && CROSS_PREFIX=$(CPYTHON) WASI_SDK_PATH=$(WASI_SDK) bash build.sh)
 	cp -a pandas/src/build/lib.*/pandas "$(@D)"
 	(cd "$(@D)" && tar czf pandas-wasi.tar.gz pandas)
+
+$(BUILD_DIR)/pillow-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
+	@mkdir -p "$(@D)"
+	(cd pillow && CROSS_PREFIX=$(CPYTHON) WASI_SDK_PATH=$(WASI_SDK) bash build.sh)
+	cp -a pillow/src/build/lib.*/PIL "$(@D)"
+	(cd "$(@D)" && tar czf pillow-wasi.tar.gz PIL)
+
+$(BUILD_DIR)/contourpy-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
+	@mkdir -p "$(@D)"
+	(cd contourpy && CROSS_PREFIX=$(CPYTHON) WASI_SDK_PATH=$(WASI_SDK) bash build.sh)
+	cp -a contourpy/src/build/lib.*/contourpy "$(@D)"
+	(cd "$(@D)" && tar czf contourpy-wasi.tar.gz contourpy)
+
+$(BUILD_DIR)/kiwisolver-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
+	@mkdir -p "$(@D)"
+	(cd kiwisolver && CROSS_PREFIX=$(CPYTHON) WASI_SDK_PATH=$(WASI_SDK) bash build.sh)
+	cp -a kiwisolver/src/build/lib.*/kiwisolver "$(@D)"
+	(cd "$(@D)" && tar czf kiwisolver-wasi.tar.gz kiwisolver)
+
+# matplotlib (Agg backend). Ships matplotlib + mpl_toolkits + pylab.py. Its
+# compiled run deps (numpy, contourpy, kiwisolver) are built by their own
+# targets and assembled for the runtime test in CI.
+$(BUILD_DIR)/matplotlib-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
+	@mkdir -p "$(@D)"
+	(cd matplotlib && CROSS_PREFIX=$(CPYTHON) WASI_SDK_PATH=$(WASI_SDK) bash build.sh)
+	cp -a matplotlib/src/build/lib.*/matplotlib "$(@D)"
+	cp -a matplotlib/src/build/lib.*/mpl_toolkits "$(@D)"
+	cp -a matplotlib/src/build/lib.*/pylab.py "$(@D)"
+	(cd "$(@D)" && tar czf matplotlib-wasi.tar.gz matplotlib mpl_toolkits pylab.py)
 
 $(BUILD_DIR)/pydantic_core-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
 	@mkdir -p "$(@D)"
@@ -166,6 +197,8 @@ $(CPYTHON): $(WASI_SDK)
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR) cpython/builddir numpy/numpy/build
+	rm -rf pandas/src pillow/src contourpy/src kiwisolver/src matplotlib/src
+	rm -f scripts/cxa_stubs.o
 	find . -name 'venv' -maxdepth 2 | xargs -I {} rm -rf {}
 	find . -name 'build' -maxdepth 3 | xargs -I {} rm -rf {}
 	find . -name 'dist' -maxdepth 3 | xargs -I {} rm -rf {}

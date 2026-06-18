@@ -2,4 +2,12 @@ build
 **/venv
 multidict/929.patch
 numpy/cxa_stubs.o
+scripts/cxa_stubs.o
 .claude/
+
+# Sources fetched from PyPI sdists at build time (not submodules).
+pandas/src
+pillow/src
+contourpy/src
+kiwisolver/src
+matplotlib/src
