@@ -25,16 +25,17 @@ Once the build process is complete, the wheels can be found in the `build` direc
 A newer set of packages is built against the exact toolchain that
 [eryx](https://github.com/eryx-org/eryx) ships with — CPython 3.14, wasi-sdk-27,
 target `wasm32-wasip2` — so the resulting `.so` extensions link cleanly into the
-eryx runtime. These are `numpy`, `pandas`, `pillow` and `matplotlib` (plus
-matplotlib's compiled deps `contourpy` and `kiwisolver`).
+eryx runtime. These are `numpy`, `pandas`, `pillow`, `matplotlib` (plus
+matplotlib's compiled deps `contourpy` and `kiwisolver`) and `lxml`.
 
 Each has a dedicated workflow under `.github/workflows/build-<pkg>.yml` that
-builds the wheel. `numpy`, `pandas` and `pillow` are also runtime-tested via
-`eryx-precompile` (compile + import + a real operation). matplotlib is built and
-imported but not runtime-tested — see the limitation below. Sources are pinned
-PyPI sdists fetched at build time (not submodules); the shared cross toolchain
-lives in `scripts/`, and the C libraries Pillow/matplotlib link against (zlib,
-libjpeg-turbo, freetype) are cross-compiled by `scripts/build-clibs.sh`.
+builds the wheel. `numpy`, `pandas`, `pillow` and `lxml` are also runtime-tested
+via `eryx-precompile` (compile + import + a real operation). matplotlib is built
+and imported but not runtime-tested — see the limitation below. Sources are
+pinned PyPI sdists fetched at build time (not submodules); the shared cross
+toolchain lives in `scripts/`, and the C libraries the wheels link against
+(zlib, libjpeg-turbo, freetype for Pillow/matplotlib; libxml2 and libxslt for
+lxml) are cross-compiled by `scripts/build-clibs.sh`.
 
 Build an individual package locally with, e.g.:
 
@@ -42,6 +43,7 @@ Build an individual package locally with, e.g.:
 make build/pandas-wasi.tar.gz
 make build/pillow-wasi.tar.gz
 make build/matplotlib-wasi.tar.gz
+make build/lxml-wasi.tar.gz
 ```
 
 ### Known limitations

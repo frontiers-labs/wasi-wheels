@@ -65,6 +65,8 @@ jobs:
         run: make -j"$(nproc)" "$(pwd)/build/matplotlib-wasi.tar.gz"
       - name: Build pandas
         run: make -j"$(nproc)" "$(pwd)/build/pandas-wasi.tar.gz"
+      - name: Build lxml
+        run: make -j"$(nproc)" "$(pwd)/build/lxml-wasi.tar.gz"
 
       - name: Inspect release tarballs
         run: ls -lh build/*-wasi.tar.gz
