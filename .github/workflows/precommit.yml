@@ -1,0 +1,40 @@
+name: pre-commit
+
+# Server-side enforcement of the same check the local pre-commit hook runs
+# (.githooks/pre-commit -> scripts/check-clibs.sh): cross-build the lxml C
+# libraries for wasm32-wasip2. Runs on every PR and on pushes to main, so clib
+# / toolchain regressions are caught before merge rather than at release time. A
+# local git hook alone is not enough — it must be installed per clone
+# (`make install-hooks`) and is easily bypassed.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clibs:
+    name: Cross-build C libraries (libxml2 + libxslt)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+
+      # check-clibs needs only the wasi-sdk (not the CPython cross-build), so
+      # cache just that. Keyed on the Makefile, which pins WASI_SDK_VERSION.
+      - name: Cache wasi-sdk
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: build/wasi-sdk
+          key: wasi-sdk-${{ runner.os }}-${{ hashFiles('Makefile') }}
+
+      - name: Cross-build libxml2 + libxslt
+        run: make check-clibs
