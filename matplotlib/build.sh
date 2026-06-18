@@ -71,11 +71,14 @@ for old, new in (
         a = a.replace(old, new)
 agg.write_text(a)
 
-# wasi has no $HOME, so Path.home() raises and matplotlib aborts at import
-# (get_configdir -> Path.home()). sys.platform is 'wasi', so the XDG branch is
-# skipped too. Fall back to the temp dir (/tmp, a sandbox preopen) when home is
-# unavailable. The dir is resolved once and frozen into the eryx snapshot, so it
-# must be a path that also exists at runtime; /tmp itself (not a subdir) is.
+# The eryx preinit sandbox has NO writable filesystem, so matplotlib's config/
+# cache dir resolution must not crash: Path.home() raises (no $HOME), and so
+# does the tempfile.mkdtemp fallback (no writable /tmp at preinit). Patch
+# _get_config_or_cache_dir to (a) pick a literal /tmp candidate instead of
+# Path.home() and (b) return that path string instead of raising when no dir is
+# writable. The FontManager is still built by scanning the bundled (read-only)
+# fonts and gets frozen into the eryx snapshot; font_manager.json_dump already
+# tolerates the cache write failing, so a non-writable path here is harmless.
 init = root / "lib" / "matplotlib" / "__init__.py"
 i = init.read_text()
 home_default = "    else:\n        configdir = Path.home() / \".matplotlib\"\n"
@@ -83,10 +86,28 @@ home_patched = ("    else:\n"
                 "        try:\n"
                 "            configdir = Path.home() / \".matplotlib\"\n"
                 "        except (RuntimeError, OSError):\n"
-                "            configdir = Path(tempfile.gettempdir())\n")
+                "            configdir = Path(os.environ.get(\"TMPDIR\") or \"/tmp\")\n")
 if home_default in i:
     i = i.replace(home_default, home_patched, 1)
-    init.write_text(i)
+
+raise_default = (
+    "    try:\n"
+    "        tmpdir = tempfile.mkdtemp(prefix=\"matplotlib-\")\n"
+    "    except OSError as exc:\n"
+    "        raise OSError(\n"
+    "            f\"Matplotlib requires access to a writable cache directory, but there \"\n"
+    "            f\"was an issue with the default path ({configdir}), and a temporary \"\n"
+    "            f\"directory could not be created; set the MPLCONFIGDIR environment \"\n"
+    "            f\"variable to a writable directory\") from exc\n")
+raise_patched = (
+    "    try:\n"
+    "        tmpdir = tempfile.mkdtemp(prefix=\"matplotlib-\")\n"
+    "    except OSError:\n"
+    "        return str(configdir)  # wasi: no writable dir at preinit\n")
+if raise_default in i:
+    i = i.replace(raise_default, raise_patched, 1)
+
+init.write_text(i)
 
 # Skip the Tk backend extension: _tkagg dlopen()s Tcl/Tk, and wasi has no
 # dlopen. It's useless headless; matplotlib uses the Agg backend.
