@@ -18,6 +18,7 @@ on:
       - matplotlib/**
       - contourpy/**
       - kiwisolver/**
+      - pillow/**
       - scripts/**
       - Makefile
       - .github/workflows/build-matplotlib.yml
@@ -77,6 +78,10 @@ jobs:
         run: make -j"$(nproc)" "$(pwd)/build/contourpy-wasi.tar.gz"
       - name: Build kiwisolver
         run: make -j"$(nproc)" "$(pwd)/build/kiwisolver-wasi.tar.gz"
+      # matplotlib hard-imports PIL (matplotlib.colors does `from PIL import
+      # Image` at module top level), so Pillow must be present at runtime.
+      - name: Build pillow
+        run: make -j"$(nproc)" "$(pwd)/build/pillow-wasi.tar.gz"
       - name: Build matplotlib
         run: make -j"$(nproc)" "$(pwd)/build/matplotlib-wasi.tar.gz"
 
@@ -94,6 +99,7 @@ jobs:
             build/contourpy-wasi.tar.gz
             build/kiwisolver-wasi.tar.gz
             build/numpy-wasi.tar.gz
+            build/pillow-wasi.tar.gz
 
       - name: Install eryx-precompile
         run: |
@@ -126,8 +132,13 @@ jobs:
             --package build/numpy-wasi.tar.gz \
             --package build/kiwisolver-wasi.tar.gz \
             --package build/contourpy-wasi.tar.gz \
+            --package build/pillow-wasi.tar.gz \
             --package build/matplotlib-wasi.tar.gz \
             --import numpy \
+            --import PIL.Image \
+            --import PIL.PngImagePlugin \
             --import matplotlib \
+            --import matplotlib.pyplot \
+            --import matplotlib.backends.backend_agg \
             --target "${CPU_TARGET}" \
-            --verify-code "import os; os.environ['MPLBACKEND']='Agg'; os.environ.setdefault('MPLCONFIGDIR','/tmp'); import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt, io; print('matplotlib', matplotlib.__version__); fig, ax = plt.subplots(); ax.plot([0,1,2,3],[0,1,4,9]); buf = io.BytesIO(); fig.savefig(buf, format='png'); print('png_bytes', buf.tell())"
+            --verify-code "import os; os.environ['MPLBACKEND']='Agg'; os.environ.setdefault('MPLCONFIGDIR','/tmp'); import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt, io; print('matplotlib', matplotlib.__version__); fig, ax = plt.subplots(); ax.plot([0,1,2,3],[0,1,4,9]); buf = io.BytesIO(); fig.savefig(buf, format='png'); data = buf.getvalue(); print('png_bytes', len(data)); assert data[:8] == b'\\x89PNG\\r\\n\\x1a\\n', 'bad png signature'; print('png_ok')"
