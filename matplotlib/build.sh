@@ -49,7 +49,31 @@ if "_WasiNoTimer" not in s:
             "    def cancel(self): pass\n\n")
     s = s.replace("import threading\n", "import threading\n" + shim, 1)
     s = s.replace("threading.Timer", "_WasiNoTimer")
-    fm.write_text(s)
+# Directory enumeration (os.walk/os.listdir) returns nothing on the eryx VFS,
+# so FontManager's font scan finds no fonts even though they are packaged and
+# openable. After the scan, register the bundled fonts from a build-time index
+# (plain file reads work on the VFS) so text rendering can find DejaVu Sans.
+if "_wasi_index.txt" not in s:
+    needle = "        finally:\n            timer.cancel()\n"
+    addon = (
+        "        finally:\n"
+        "            timer.cancel()\n"
+        "        if not self.ttflist:\n"
+        "            try:\n"
+        "                _idx = os.path.join(str(mpl.get_data_path()), 'fonts', '_wasi_index.txt')\n"
+        "                with open(_idx) as _fh:\n"
+        "                    _rels = [_l.strip() for _l in _fh if _l.strip()]\n"
+        "                for _rel in _rels:\n"
+        "                    try:\n"
+        "                        self.addfont(os.path.join(str(mpl.get_data_path()), _rel))\n"
+        "                    except Exception:\n"
+        "                        pass\n"
+        "            except OSError:\n"
+        "                pass\n"
+    )
+    if needle in s:
+        s = s.replace(needle, addon, 1)
+fm.write_text(s)
 
 ext = root / "extern" / "meson.build"
 e = ext.read_text()
@@ -165,3 +189,23 @@ pip wheel . -w wheels -v --no-build-isolation --no-deps \
   -Csetup-args="-Dbuildtype=release"
 
 unpack_wheel wheels
+
+# Generate the font index consumed by the FontManager patch above. Built here
+# on the real filesystem (os.listdir works); at runtime the eryx VFS cannot
+# enumerate directories, so the bundled fonts are registered from this list.
+FONTS_DIR="build/lib.wasi-wasm32-${PY_VER}/matplotlib/mpl-data/fonts"
+python3 - "${FONTS_DIR}" <<'PY'
+import os, sys
+root = sys.argv[1]
+out = []
+for sub in ("ttf", "afm", "pdfcorefonts"):
+    d = os.path.join(root, sub)
+    if not os.path.isdir(d):
+        continue
+    for name in sorted(os.listdir(d)):
+        if name.lower().endswith((".ttf", ".otf", ".afm")):
+            out.append(f"fonts/{sub}/{name}")
+with open(os.path.join(root, "_wasi_index.txt"), "w") as fh:
+    fh.write("\n".join(out) + "\n")
+print("wrote font index:", len(out), "entries ->", os.path.join(root, "_wasi_index.txt"))
+PY
