@@ -70,6 +70,19 @@ for old, new in (
     if new not in a:
         a = a.replace(old, new)
 agg.write_text(a)
+
+# Skip the Tk backend extension: _tkagg dlopen()s Tcl/Tk, and wasi has no
+# dlopen. It's useless headless; matplotlib uses the Agg backend.
+mb = root / "src" / "meson.build"
+m = mb.read_text()
+if "ext == '_tkagg'" not in m:
+    m = m.replace(
+        "foreach ext, kwargs : extension_data\n",
+        "foreach ext, kwargs : extension_data\n"
+        "  if ext == '_tkagg'\n    continue\n  endif\n",
+        1,
+    )
+    mb.write_text(m)
 PY
 
 if [ ! -e "${HERE}/venv" ]; then
