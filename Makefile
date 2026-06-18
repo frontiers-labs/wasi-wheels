@@ -6,6 +6,7 @@ OUTPUTS := \
 	$(BUILD_DIR)/aiohttp-wasi.tar.gz \
 	$(BUILD_DIR)/charset_normalizer-wasi.tar.gz \
 	$(BUILD_DIR)/frozenlist-wasi.tar.gz \
+	$(BUILD_DIR)/lxml-wasi.tar.gz \
 	$(BUILD_DIR)/multidict-wasi.tar.gz \
 	$(BUILD_DIR)/numpy-wasi.tar.gz \
 	$(BUILD_DIR)/pandas-wasi.tar.gz \
@@ -94,6 +95,14 @@ $(BUILD_DIR)/matplotlib-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
 	cp -a matplotlib/src/build/lib.*/mpl_toolkits "$(@D)"
 	cp -a matplotlib/src/build/lib.*/pylab.py "$(@D)"
 	(cd "$(@D)" && tar czf matplotlib-wasi.tar.gz matplotlib mpl_toolkits pylab.py)
+
+# lxml links the cross-built libxml2 + libxslt static archives (built first by
+# its build.sh via scripts/build-clibs.sh).
+$(BUILD_DIR)/lxml-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
+	@mkdir -p "$(@D)"
+	(cd lxml && CROSS_PREFIX=$(CPYTHON) WASI_SDK_PATH=$(WASI_SDK) bash build.sh)
+	cp -a lxml/src/build/lib.*/lxml "$(@D)"
+	(cd "$(@D)" && tar czf lxml-wasi.tar.gz lxml)
 
 $(BUILD_DIR)/pydantic_core-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
 	@mkdir -p "$(@D)"
@@ -197,7 +206,7 @@ $(CPYTHON): $(WASI_SDK)
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR) cpython/builddir numpy/numpy/build
-	rm -rf pandas/src pillow/src contourpy/src kiwisolver/src matplotlib/src
+	rm -rf pandas/src pillow/src contourpy/src kiwisolver/src matplotlib/src lxml/src
 	rm -f scripts/cxa_stubs.o
 	find . -name 'venv' -maxdepth 2 | xargs -I {} rm -rf {}
 	find . -name 'build' -maxdepth 3 | xargs -I {} rm -rf {}

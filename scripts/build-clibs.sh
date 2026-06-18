@@ -32,6 +32,8 @@ ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 LIBJPEG_VERSION=3.1.2
 LIBPNG_VERSION=1.6.58
 FREETYPE_VERSION=2.13.3
+LIBXML2_VERSION=2.13.5
+LIBXSLT_VERSION=1.1.42
 
 fetch() {
   local url=$1 out=$2 sha=$3
@@ -121,12 +123,55 @@ build_freetype() {
     -DFT_DISABLE_BZIP2=ON -DFT_DISABLE_PNG=ON -DFT_DISABLE_ZLIB=ON
 }
 
+# libxml2 + libxslt back lxml. Built without their optional deps (iconv, lzma,
+# zlib, threads, http, python) and without the command-line programs/tests so
+# nothing pulls in features missing on wasi or links a full executable (which
+# would need the wasm SjLj runtime). Static archives + headers + the xml2-config
+# / xslt-config helper scripts land in the shared prefix; lxml's setup.py reads
+# its build flags from those config scripts.
+build_libxml2() {
+  [ -e "${PREFIX}/lib/libxml2.a" ] && return 0
+  local t="${WORK}/libxml2-${LIBXML2_VERSION}.tar.xz"
+  local series="${LIBXML2_VERSION%.*}"
+  fetch "https://download.gnome.org/sources/libxml2/${series}/libxml2-${LIBXML2_VERSION}.tar.xz" "${t}" ""
+  tar -C "${WORK}" -xf "${t}"
+  cmake_build "${WORK}/libxml2-${LIBXML2_VERSION}" \
+    -DLIBXML2_WITH_PYTHON=OFF \
+    -DLIBXML2_WITH_ICONV=OFF \
+    -DLIBXML2_WITH_LZMA=OFF \
+    -DLIBXML2_WITH_ZLIB=OFF \
+    -DLIBXML2_WITH_THREADS=OFF \
+    -DLIBXML2_WITH_HTTP=OFF \
+    -DLIBXML2_WITH_MODULES=OFF \
+    -DLIBXML2_WITH_TESTS=OFF \
+    -DLIBXML2_WITH_PROGRAMS=OFF
+}
+
+build_libxslt() {
+  [ -e "${PREFIX}/lib/libxslt.a" ] && return 0
+  build_libxml2
+  local t="${WORK}/libxslt-${LIBXSLT_VERSION}.tar.xz"
+  local series="${LIBXSLT_VERSION%.*}"
+  fetch "https://download.gnome.org/sources/libxslt/${series}/libxslt-${LIBXSLT_VERSION}.tar.xz" "${t}" ""
+  tar -C "${WORK}" -xf "${t}"
+  # Finds the static libxml2 we just installed via CMAKE_PREFIX_PATH (=PREFIX).
+  cmake_build "${WORK}/libxslt-${LIBXSLT_VERSION}" \
+    -DLIBXSLT_WITH_PYTHON=OFF \
+    -DLIBXSLT_WITH_CRYPTO=OFF \
+    -DLIBXSLT_WITH_THREADS=OFF \
+    -DLIBXSLT_WITH_MODULES=OFF \
+    -DLIBXSLT_WITH_TESTS=OFF \
+    -DLIBXSLT_WITH_PROGRAMS=OFF
+}
+
 for lib in ${CLIBS}; do
   case "${lib}" in
     zlib) build_zlib ;;
     libjpeg) build_libjpeg ;;
     libpng) build_libpng ;;
     freetype) build_freetype ;;
+    libxml2) build_libxml2 ;;
+    libxslt) build_libxslt ;;
     *) echo "unknown clib: ${lib}" >&2; exit 1 ;;
   esac
 done
