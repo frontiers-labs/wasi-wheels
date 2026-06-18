@@ -26,14 +26,16 @@ export ZLIB_ROOT="${CLIBS_PREFIX}"
 export JPEG_ROOT="${CLIBS_PREFIX}"
 export FREETYPE_ROOT="${CLIBS_PREFIX}"
 export CFLAGS="${CFLAGS} -I${CLIBS_PREFIX}/include"
-# Whole-archive libsetjmp so libjpeg's setjmp (__c_longjmp) resolves regardless
-# of link order (setuptools places LDFLAGS before the object files).
-export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib -Wl,--whole-archive ${SJLJ_LIB} -Wl,--no-whole-archive"
+export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib"
 
 fetch_sdist "${PILLOW_URL}" "${HERE}/src"
 
-# Drop the Tkinter extension: it dlopen()s Tk (no dlopen on wasi) and a headless
-# sandbox has no use for it. Reuse Pillow's own _remove_extension mechanism.
+# setup.py adjustments:
+#  - drop the Tkinter extension (dlopen()s Tk; no dlopen on wasi, useless headless)
+#  - link libsetjmp only into the extensions that use setjmp (_imaging via
+#    libjpeg, _imagingft via freetype). extra_link_args go after the objects, so
+#    -lsetjmp resolves __c_longjmp there. Forcing it into the other extensions
+#    (e.g. _imagingmath) would leave a dangling wasm EH tag eryx can't parse.
 python3 - "${HERE}/src" <<'PY'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1]) / "setup.py"
@@ -41,6 +43,16 @@ s = p.read_text()
 s = s.replace(
     'self._update_extension("PIL._imagingtk", tk_libs)',
     'self._remove_extension("PIL._imagingtk")',
+    1,
+)
+s = s.replace(
+    'Extension("PIL._imaging", files)',
+    'Extension("PIL._imaging", files, extra_link_args=["-lsetjmp"])',
+    1,
+)
+s = s.replace(
+    'Extension("PIL._imagingft", ["src/_imagingft.c"])',
+    'Extension("PIL._imagingft", ["src/_imagingft.c"], extra_link_args=["-lsetjmp"])',
     1,
 )
 p.write_text(s)

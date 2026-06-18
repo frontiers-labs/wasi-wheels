@@ -23,11 +23,13 @@ CLIBS="freetype" bash "${REPO}/scripts/build-clibs.sh"
 
 export PKG_CONFIG_PATH="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgconfig:${PKG_CONFIG_PATH}"
 export PKG_CONFIG_LIBDIR="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgconfig:${PKG_CONFIG_LIBDIR}"
-export CFLAGS="${CFLAGS} -I${CLIBS_PREFIX}/include"
-export CXXFLAGS="${CXXFLAGS} -I${CLIBS_PREFIX}/include"
-# Whole-archive libsetjmp so freetype's rasterizer setjmp (__c_longjmp)
-# resolves regardless of link order.
-export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib -Wl,--whole-archive ${SJLJ_LIB} -Wl,--no-whole-archive"
+export CFLAGS="${CFLAGS} -I${CLIBS_PREFIX}/include -D_WASI_EMULATED_PROCESS_CLOCKS"
+export CXXFLAGS="${CXXFLAGS} -I${CLIBS_PREFIX}/include -D_WASI_EMULATED_PROCESS_CLOCKS"
+# meson appends env LDFLAGS after the object files, so these -l libs are pulled
+# in only for the extensions that reference them: -lsetjmp for ft2font (freetype
+# setjmp; keeps the dangling wasm EH tag out of the others, which eryx can't
+# parse), -lwasi-emulated-process-clocks for qhull (clock()).
+export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib -lsetjmp -lwasi-emulated-process-clocks"
 
 fetch_sdist "${MATPLOTLIB_URL}" "${HERE}/src"
 

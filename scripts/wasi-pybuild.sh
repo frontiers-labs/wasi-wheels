@@ -79,10 +79,8 @@ CXA_STUB_OBJ="${WASI_SCRIPTS}/cxa_stubs.o"
 # setjmp/longjmp lowering must match the C libraries (freetype/libjpeg use it).
 SJLJ="-mllvm -wasm-enable-sjlj"
 # The wasm SjLj runtime (__c_longjmp, __wasm_setjmp/longjmp) lives in wasi-sdk's
-# libsetjmp.a. Packages that use setjmp link it with --whole-archive (below);
-# plain -lsetjmp resolves too late under setuptools, which puts LDFLAGS before
-# the object files.
-export SJLJ_LIB="${WASI_SDK_PATH}/share/wasi-sysroot/lib/${TARGET}/libsetjmp.a"
+# libsetjmp.a; setjmp users link -lsetjmp after their objects (see the pillow
+# and matplotlib scripts) so it is pulled only into the extensions that need it.
 export CFLAGS="--target=${TARGET} -fPIC ${SJLJ} -I${CROSS_PREFIX}/include/python${PY_VER} -D__EMSCRIPTEN__=1"
 export CXXFLAGS="--target=${TARGET} -fPIC ${SJLJ} -I${CROSS_PREFIX}/include/python${PY_VER}"
 export LDFLAGS="--target=${TARGET} -shared ${CROSS_PREFIX}/lib/libpython${PY_VER}.so ${CXA_STUB_OBJ}"
