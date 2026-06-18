@@ -79,7 +79,7 @@ mb = root / "src" / "meson.build"
 m = mb.read_text()
 if "whole-archive" not in m:
     link_args = (
-        "    'link_args': ([\'_backend_agg\', \'ft2font\'].contains(ext) ? "
+        "    'link_args': ([\'_backend_agg\', \'ft2font\', \'_qhull\'].contains(ext) ? "
         "[\'-Wl,--whole-archive\', \'%s\', \'-Wl,--no-whole-archive\'] : []) "
         "+ kwargs.get(\'link_args\', []),\n" % sjlj
     )
