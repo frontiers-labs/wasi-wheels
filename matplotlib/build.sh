@@ -10,16 +10,19 @@ set -eou pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "${HERE}/.." && pwd)
-. "${REPO}/scripts/wasi-pybuild.sh"
 
 MATPLOTLIB_VERSION=3.10.8
 MATPLOTLIB_SHA256=2299372c19d56bcd35cf05a2738308758d32b9eaed2371898d8f5bd33f084aa3
 MATPLOTLIB_URL="https://files.pythonhosted.org/packages/source/m/matplotlib/matplotlib-${MATPLOTLIB_VERSION}.tar.gz"
 
+# Build freetype first, with a clean environment (no leaked extension flags).
 export CLIBS_PREFIX="${REPO}/build/clibs"
 CLIBS="freetype" bash "${REPO}/scripts/build-clibs.sh"
-export PKG_CONFIG_PATH="${CLIBS_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}"
-export PKG_CONFIG_LIBDIR="${CLIBS_PREFIX}/lib/pkgconfig:${PKG_CONFIG_LIBDIR}"
+
+. "${REPO}/scripts/wasi-pybuild.sh"
+
+export PKG_CONFIG_PATH="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgconfig:${PKG_CONFIG_PATH}"
+export PKG_CONFIG_LIBDIR="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgconfig:${PKG_CONFIG_LIBDIR}"
 export CFLAGS="${CFLAGS} -I${CLIBS_PREFIX}/include"
 export CXXFLAGS="${CXXFLAGS} -I${CLIBS_PREFIX}/include"
 export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib"
@@ -58,6 +61,8 @@ fi
 . "${HERE}/venv/bin/activate"
 pip install --upgrade pip
 pip install "meson-python>=0.13.1" "meson>=1.2.0,<2" ninja "pybind11>=2.13.2" wheel numpy
+
+enable_cross_python
 
 cd "${HERE}/src"
 CROSS_FILE="$(pwd)/build.meson.cross"

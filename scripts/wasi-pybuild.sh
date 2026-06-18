@@ -24,8 +24,15 @@ export LDSHARED="${CC}"
 export CC_LD=lld
 export CXX_LD=lld
 export WASI_WHEELS_NO_LINK_GROUPS=1
-export _PYTHON_SYSCONFIGDATA_NAME="_sysconfigdata_${ARCH_TRIPLET}"
-export PYTHONPATH="${CROSS_PREFIX}/lib/python${PY_VER}"
+
+# Point Python at the cross stdlib + wasm sysconfig. Exported via a function,
+# not at source time: doing it before `python -m venv` runs makes host
+# ensurepip load the wasm sysconfigdata and fail. Call after venv + host pip
+# installs, right before the cross build.
+enable_cross_python() {
+  export _PYTHON_SYSCONFIGDATA_NAME="_sysconfigdata_${ARCH_TRIPLET}"
+  export PYTHONPATH="${CROSS_PREFIX}/lib/python${PY_VER}"
+}
 
 # Compile the C++ exception ABI stubs once; link into every extension.
 CXA_STUB_OBJ="${WASI_SCRIPTS}/cxa_stubs.o"

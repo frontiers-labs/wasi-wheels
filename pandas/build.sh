@@ -39,6 +39,8 @@ cp -f "${NUMPY_TARGET_INC}/numpyconfig.h" "${HOST_NP_INC}/numpy/" 2>/dev/null ||
 # Catch implicit declarations: on wasm they silently produce wrong ABI.
 export CFLAGS="${CFLAGS} -Werror=implicit-function-declaration -Oz"
 
+enable_cross_python
+
 cd "${HERE}/src"
 CROSS_FILE="$(pwd)/build.meson.cross"
 write_cross_file "${CROSS_FILE}"

@@ -22,6 +22,8 @@ pip install --upgrade pip setuptools wheel "cppy>=1.3.0" setuptools_scm
 
 export SETUPTOOLS_SCM_PRETEND_VERSION="${KIWISOLVER_VERSION}"
 
+enable_cross_python
+
 cd "${HERE}/src"
 rm -rf build wheels
 mkdir -p wheels

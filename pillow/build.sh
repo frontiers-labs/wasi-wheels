@@ -8,17 +8,20 @@ set -eou pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "${HERE}/.." && pwd)
-. "${REPO}/scripts/wasi-pybuild.sh"
 
 PILLOW_VERSION=12.2.0
 PILLOW_SHA256=a830b1a40919539d07806aa58e1b114df53ddd43213d9c8b75847eee6c0182b5
 PILLOW_URL="https://files.pythonhosted.org/packages/source/p/pillow/pillow-${PILLOW_VERSION}.tar.gz"
 
+# Build the C libraries first, with a clean environment: the Python-extension
+# CFLAGS/LDFLAGS (-shared, libpython) must not leak into their CMake builds.
 export CLIBS_PREFIX="${REPO}/build/clibs"
 CLIBS="zlib libjpeg freetype" bash "${REPO}/scripts/build-clibs.sh"
 
-export PKG_CONFIG_PATH="${CLIBS_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}"
-export PKG_CONFIG_LIBDIR="${CLIBS_PREFIX}/lib/pkgconfig:${PKG_CONFIG_LIBDIR}"
+. "${REPO}/scripts/wasi-pybuild.sh"
+
+export PKG_CONFIG_PATH="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgconfig:${PKG_CONFIG_PATH}"
+export PKG_CONFIG_LIBDIR="${CLIBS_PREFIX}/lib/pkgconfig:${CLIBS_PREFIX}/share/pkgconfig:${PKG_CONFIG_LIBDIR}"
 export ZLIB_ROOT="${CLIBS_PREFIX}"
 export JPEG_ROOT="${CLIBS_PREFIX}"
 export FREETYPE_ROOT="${CLIBS_PREFIX}"
@@ -32,6 +35,8 @@ if [ ! -e "${HERE}/venv" ]; then
 fi
 . "${HERE}/venv/bin/activate"
 pip install --upgrade pip setuptools wheel
+
+enable_cross_python
 
 cd "${HERE}/src"
 rm -rf build wheels

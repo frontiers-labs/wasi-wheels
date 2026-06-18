@@ -65,8 +65,13 @@ build_zlib() {
   fetch "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz" "${t}" "${ZLIB_SHA256}"
   tar -C "${WORK}" -xf "${t}"
   cmake_build "${WORK}/zlib-${ZLIB_VERSION}" -DZLIB_BUILD_EXAMPLES=OFF
-  # Some consumers probe libz.so; keep only the static archive.
-  rm -f "${PREFIX}"/lib/libz.so* 2>/dev/null || true
+  # Drop shared libs; force static linking only.
+  rm -f "${PREFIX}"/lib/libz.so* "${PREFIX}"/lib/libzlib.so* 2>/dev/null || true
+  # zlib's CMake only renames the static lib to libz.a on UNIX; for the WASI
+  # system name it stays libzlibstatic.a, which `-lz` won't find.
+  if [ ! -e "${PREFIX}/lib/libz.a" ] && [ -e "${PREFIX}/lib/libzlibstatic.a" ]; then
+    cp -f "${PREFIX}/lib/libzlibstatic.a" "${PREFIX}/lib/libz.a"
+  fi
 }
 
 build_libjpeg() {

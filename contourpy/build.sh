@@ -22,6 +22,8 @@ fi
 pip install --upgrade pip
 pip install "meson-python>=0.13.1" "meson>=1.2.0,<2" ninja "pybind11>=2.13.2,!=2.13.3" wheel
 
+enable_cross_python
+
 cd "${HERE}/src"
 CROSS_FILE="$(pwd)/build.meson.cross"
 write_cross_file "${CROSS_FILE}"
