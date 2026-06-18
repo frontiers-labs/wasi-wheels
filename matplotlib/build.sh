@@ -71,6 +71,23 @@ for old, new in (
         a = a.replace(old, new)
 agg.write_text(a)
 
+# wasi has no $HOME, so Path.home() raises and matplotlib aborts at import
+# (get_configdir -> Path.home()). sys.platform is 'wasi', so the XDG branch is
+# skipped too. Fall back to the temp dir (/tmp, a sandbox preopen) when home is
+# unavailable. The dir is resolved once and frozen into the eryx snapshot, so it
+# must be a path that also exists at runtime; /tmp itself (not a subdir) is.
+init = root / "lib" / "matplotlib" / "__init__.py"
+i = init.read_text()
+home_default = "    else:\n        configdir = Path.home() / \".matplotlib\"\n"
+home_patched = ("    else:\n"
+                "        try:\n"
+                "            configdir = Path.home() / \".matplotlib\"\n"
+                "        except (RuntimeError, OSError):\n"
+                "            configdir = Path(tempfile.gettempdir())\n")
+if home_default in i:
+    i = i.replace(home_default, home_patched, 1)
+    init.write_text(i)
+
 # Skip the Tk backend extension: _tkagg dlopen()s Tcl/Tk, and wasi has no
 # dlopen. It's useless headless; matplotlib uses the Agg backend.
 mb = root / "src" / "meson.build"
