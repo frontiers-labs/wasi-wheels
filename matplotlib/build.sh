@@ -109,6 +109,21 @@ if raise_default in i:
 
 init.write_text(i)
 
+# ft2font registers a module-level __getattr__ (a deprecation shim) that raises
+# a C++ exception for unknown names. pybind11 turns AttributeError into a C++
+# throw, and on wasi we have no working C++ exception runtime (cxa_stubs abort),
+# so a routine hasattr() probe at import aborts the whole interpreter. Drop the
+# shim: matplotlib 3.10 uses the enum classes, not the deprecated module-level
+# constants, so nothing on the import/render path needs it.
+ftw = root / "src" / "ft2font_wrapper.cpp"
+f = ftw.read_text()
+f = f.replace(
+    '    m.def("__getattr__", ft2font__getattr__);\n',
+    "    (void)ft2font__getattr__;  // wasi: no C++ exceptions; drop throwing shim\n",
+    1,
+)
+ftw.write_text(f)
+
 # Skip the Tk backend extension: _tkagg dlopen()s Tcl/Tk, and wasi has no
 # dlopen. It's useless headless; matplotlib uses the Agg backend.
 mb = root / "src" / "meson.build"
