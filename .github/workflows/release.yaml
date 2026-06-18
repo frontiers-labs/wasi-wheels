@@ -50,12 +50,17 @@ jobs:
         run: make -j"$(nproc)" "$(pwd)/cpython/builddir/wasi/install"
 
       # Build only the released packages, sequentially (each target still
-      # parallelises internally) so a failure points at one package. pandas
-      # depends on the numpy build; make handles the ordering.
+      # parallelises internally) so a failure points at one package. contourpy
+      # and kiwisolver are matplotlib's compiled runtime deps and ship with it;
+      # pandas depends on the numpy build. make handles the ordering.
       - name: Build numpy
         run: make -j"$(nproc)" "$(pwd)/build/numpy-wasi.tar.gz"
       - name: Build pillow
         run: make -j"$(nproc)" "$(pwd)/build/pillow-wasi.tar.gz"
+      - name: Build contourpy
+        run: make -j"$(nproc)" "$(pwd)/build/contourpy-wasi.tar.gz"
+      - name: Build kiwisolver
+        run: make -j"$(nproc)" "$(pwd)/build/kiwisolver-wasi.tar.gz"
       - name: Build matplotlib
         run: make -j"$(nproc)" "$(pwd)/build/matplotlib-wasi.tar.gz"
       - name: Build pandas
