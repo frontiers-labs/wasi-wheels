@@ -89,6 +89,12 @@ jobs:
         run: |
           ls -lh build/*-wasi.tar.gz
           tar tzf build/matplotlib-wasi.tar.gz | grep -E "\.so$" | head
+          echo "--- mpl-data presence ---"
+          tar tzf build/matplotlib-wasi.tar.gz | grep -c "mpl-data/matplotlibrc" || true
+          echo "ttf font count:"
+          tar tzf build/matplotlib-wasi.tar.gz | grep -cE "mpl-data/fonts/ttf/.*\.ttf$" || true
+          echo "sample ttf entries:"
+          tar tzf build/matplotlib-wasi.tar.gz | grep -E "mpl-data/fonts/ttf/.*\.ttf$" | head || true
 
       - name: Upload matplotlib artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -141,4 +147,4 @@ jobs:
             --import matplotlib.pyplot \
             --import matplotlib.backends.backend_agg \
             --target "${CPU_TARGET}" \
-            --verify-code "import os; os.environ['MPLBACKEND']='Agg'; os.environ.setdefault('MPLCONFIGDIR','/tmp'); import matplotlib; matplotlib.use('Agg'); from matplotlib import font_manager as fmod; import matplotlib.pyplot as plt, io; print('matplotlib', matplotlib.__version__); dp = matplotlib.get_data_path(); ttf = os.path.join(dp, 'fonts', 'ttf'); print('datapath', dp, 'ttfdir', os.path.isdir(ttf)); print('ttf_count', len(os.listdir(ttf)) if os.path.isdir(ttf) else -1); print('ttflist_len', len(fmod.fontManager.ttflist)); fig, ax = plt.subplots(); ax.plot([0,1,2,3],[0,1,4,9]); buf = io.BytesIO(); fig.savefig(buf, format='png'); data = buf.getvalue(); print('png_bytes', len(data)); assert data[:8] == b'\\x89PNG\\r\\n\\x1a\\n', 'bad png signature'; print('png_ok')"
+            --verify-code "import os; os.environ['MPLBACKEND']='Agg'; os.environ.setdefault('MPLCONFIGDIR','/tmp'); import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt, io; print('matplotlib', matplotlib.__version__); fig, ax = plt.subplots(); ax.plot([0,1,2,3],[0,1,4,9]); buf = io.BytesIO(); fig.savefig(buf, format='png'); data = buf.getvalue(); print('png_bytes', len(data)); assert data[:8] == b'\\x89PNG\\r\\n\\x1a\\n', 'bad png signature'; print('png_ok')"
