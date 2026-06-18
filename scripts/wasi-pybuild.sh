@@ -54,9 +54,14 @@ CXA_STUB_OBJ="${WASI_SCRIPTS}/cxa_stubs.o"
 
 # setjmp/longjmp lowering must match the C libraries (freetype/libjpeg use it).
 SJLJ="-mllvm -wasm-enable-sjlj"
+# The wasm SjLj runtime helper __c_longjmp lives in clang's compiler-rt
+# builtins, which isn't auto-linked into our -shared extensions and isn't
+# exported by libpython.so. Link it explicitly so freetype/libjpeg setjmp
+# users resolve.
+CRT_BUILTINS="$(${CC} --target=${TARGET} --print-libgcc-file-name 2>/dev/null || true)"
 export CFLAGS="--target=${TARGET} -fPIC ${SJLJ} -I${CROSS_PREFIX}/include/python${PY_VER} -D__EMSCRIPTEN__=1"
 export CXXFLAGS="--target=${TARGET} -fPIC ${SJLJ} -I${CROSS_PREFIX}/include/python${PY_VER}"
-export LDFLAGS="--target=${TARGET} -shared ${CROSS_PREFIX}/lib/libpython${PY_VER}.so ${CXA_STUB_OBJ}"
+export LDFLAGS="--target=${TARGET} -shared ${CROSS_PREFIX}/lib/libpython${PY_VER}.so ${CXA_STUB_OBJ} ${CRT_BUILTINS}"
 
 # pkg-config: cpython first; package scripts prepend their C-lib prefix.
 export PKG_CONFIG_LIBDIR="${CROSS_PREFIX}/lib/pkgconfig"
