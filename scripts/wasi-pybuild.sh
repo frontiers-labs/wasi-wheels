@@ -76,15 +76,12 @@ PY
 CXA_STUB_OBJ="${WASI_SCRIPTS}/cxa_stubs.o"
 "${CC}" --target="${TARGET}" -fPIC -c "${WASI_SCRIPTS}/cxa_stubs.c" -o "${CXA_STUB_OBJ}"
 
-# setjmp/longjmp lowering must match the C libraries (freetype/libjpeg use it).
-SJLJ="-mllvm -wasm-enable-sjlj"
-# The wasm SjLj runtime lives in wasi-sdk's libsetjmp.a (rt.o). __c_longjmp is
-# a weak symbol/exception tag, so a plain -lsetjmp never pulls it; setjmp-using
-# extensions must --whole-archive it (per-extension, so the unused EH tag stays
-# out of the others, which eryx can't parse). See the pillow/matplotlib scripts.
-export SJLJ_LIB="${WASI_SDK_PATH}/share/wasi-sysroot/lib/${TARGET}/libsetjmp.a"
-export CFLAGS="--target=${TARGET} -fPIC ${SJLJ} -I${CROSS_PREFIX}/include/python${PY_VER} -D__EMSCRIPTEN__=1"
-export CXXFLAGS="--target=${TARGET} -fPIC ${SJLJ} -I${CROSS_PREFIX}/include/python${PY_VER}"
+# Avoid wasm SjLj/EH: force-include a setjmp.h replacement that traps instead
+# of using the wasm exception-handling proposal. The EH tag it would otherwise
+# emit cannot be linked by eryx's component encoder (wit-component).
+NOSJLJ="-include ${WASI_SCRIPTS}/nosjlj.h"
+export CFLAGS="--target=${TARGET} -fPIC ${NOSJLJ} -I${CROSS_PREFIX}/include/python${PY_VER} -D__EMSCRIPTEN__=1"
+export CXXFLAGS="--target=${TARGET} -fPIC ${NOSJLJ} -I${CROSS_PREFIX}/include/python${PY_VER}"
 export LDFLAGS="--target=${TARGET} -shared ${CROSS_PREFIX}/lib/libpython${PY_VER}.so ${CXA_STUB_OBJ}"
 
 # pkg-config: cpython first; package scripts prepend their C-lib prefix.

@@ -27,9 +27,10 @@ set(CMAKE_RANLIB "${_wasi_sdk}/bin/llvm-ranlib")
 set(CMAKE_NM "${_wasi_sdk}/bin/llvm-nm")
 
 # -fPIC: every archive is linked into a shared (.so) Python extension.
-# wasm-enable-sjlj: freetype's rasterizer and libjpeg's error handling use
-# setjmp/longjmp, which wasi-sdk lowers via the wasm exception-handling proposal.
-set(_wasi_cflags "-fPIC -O2 -mllvm -wasm-enable-sjlj")
+# nosjlj.h: replace <setjmp.h> with trapping stubs so freetype/libjpeg/qhull do
+# not emit a wasm exception tag (which eryx's component encoder cannot link).
+set(_wasi_dir "${CMAKE_CURRENT_LIST_DIR}")
+set(_wasi_cflags "-fPIC -O2 -include ${_wasi_dir}/nosjlj.h")
 set(CMAKE_C_FLAGS_INIT "${_wasi_cflags}")
 set(CMAKE_CXX_FLAGS_INIT "${_wasi_cflags}")
 

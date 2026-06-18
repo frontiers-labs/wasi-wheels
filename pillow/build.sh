@@ -16,7 +16,7 @@ PILLOW_URL="https://files.pythonhosted.org/packages/source/p/pillow/pillow-${PIL
 # Build the C libraries first, with a clean environment: the Python-extension
 # CFLAGS/LDFLAGS (-shared, libpython) must not leak into their CMake builds.
 export CLIBS_PREFIX="${REPO}/build/clibs"
-CLIBS="zlib libjpeg" bash "${REPO}/scripts/build-clibs.sh"
+CLIBS="zlib libjpeg freetype" bash "${REPO}/scripts/build-clibs.sh"
 
 . "${REPO}/scripts/wasi-pybuild.sh"
 
@@ -30,31 +30,16 @@ export LDFLAGS="${LDFLAGS} -L${CLIBS_PREFIX}/lib"
 
 fetch_sdist "${PILLOW_URL}" "${HERE}/src"
 
-# setup.py adjustments:
-#  - drop the Tkinter extension (dlopen()s Tk; no dlopen on wasi, useless headless)
-#  - whole-archive libsetjmp into only the setjmp-using extensions (_imaging via
-#    libjpeg, _imagingft via freetype). __c_longjmp is a weak EH tag that a plain
-#    -lsetjmp won't pull; forcing it into the other extensions (e.g. _imagingmath)
-#    would leave a dangling tag eryx can't parse.
-python3 - "${HERE}/src" "${SJLJ_LIB}" <<'PY'
+# Drop the Tkinter extension: it dlopen()s Tk (no dlopen on wasi) and a headless
+# sandbox has no use for it. setjmp in libjpeg/freetype is neutralised by the
+# nosjlj.h force-include, so no special link handling is needed.
+python3 - "${HERE}/src" <<'PY'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1]) / "setup.py"
-sjlj = sys.argv[2]
-ela = '[%r, %r, %r]' % ("-Wl,--whole-archive", sjlj, "-Wl,--no-whole-archive")
 s = p.read_text()
 s = s.replace(
     'self._update_extension("PIL._imagingtk", tk_libs)',
     'self._remove_extension("PIL._imagingtk")',
-    1,
-)
-s = s.replace(
-    'Extension("PIL._imaging", files)',
-    'Extension("PIL._imaging", files, extra_link_args=%s)' % ela,
-    1,
-)
-s = s.replace(
-    'Extension("PIL._imagingft", ["src/_imagingft.c"])',
-    'Extension("PIL._imagingft", ["src/_imagingft.c"], extra_link_args=%s)' % ela,
     1,
 )
 p.write_text(s)
@@ -73,7 +58,7 @@ rm -rf build wheels
 mkdir -p wheels
 pip wheel . -w wheels -v --no-build-isolation --no-deps \
   -C platform-guessing=disable \
-  -C zlib=enable -C jpeg=enable -C freetype=disable \
+  -C zlib=enable -C jpeg=enable -C freetype=enable \
   -C tiff=disable -C webp=disable -C lcms=disable -C xcb=disable \
   -C jpeg2000=disable -C imagequant=disable -C avif=disable -C raqm=disable
 
