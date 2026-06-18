@@ -55,6 +55,7 @@ cmake_build() {
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DCMAKE_PREFIX_PATH="${PREFIX}" \
+    -DCMAKE_FIND_ROOT_PATH="${PREFIX}" \
     -DBUILD_SHARED_LIBS=OFF \
     "$@"
   cmake --build "${src}/build-wasi" -j"$(nproc)"

@@ -3,6 +3,7 @@ WASI_SDK := $(BUILD_DIR)/wasi-sdk
 CPYTHON := $(abspath cpython/builddir/wasi/install)
 SYSCONFIG := $(abspath cpython/builddir/wasi/build/lib.wasi-wasm32-3.14)
 OUTPUTS := \
+	$(BUILD_DIR)/cpython-wasi.tar.gz \
 	$(BUILD_DIR)/aiohttp-wasi.tar.gz \
 	$(BUILD_DIR)/charset_normalizer-wasi.tar.gz \
 	$(BUILD_DIR)/frozenlist-wasi.tar.gz \
@@ -28,6 +29,19 @@ PYO3_CROSS_LIB_DIR := $(abspath cpython/builddir/wasi/build/lib.wasi-wasm32-3.14
 all: $(OUTPUTS)
 
 $(OUTPUTS): $(WASI_SDK) $(CPYTHON)
+
+# CPython runtime + standard library for wasm32-wasip2. Ships the cross
+# interpreter's shared lib (libpython3.14.so), headers and the full stdlib
+# (lib/python3.14, including lib-dynload extension modules and the wasm
+# sysconfigdata) so consumers have a complete WASI Python to load the wheels
+# into. Staged under a top-level cpython/ dir; the static libpython archive is
+# dropped (redundant with the .so and large).
+$(BUILD_DIR)/cpython-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
+	@mkdir -p "$(@D)"
+	rm -rf "$(BUILD_DIR)/cpython"
+	cp -a "$(CPYTHON)/." "$(BUILD_DIR)/cpython/"
+	rm -f "$(BUILD_DIR)"/cpython/lib/libpython*.a
+	(cd "$(BUILD_DIR)" && tar czf cpython-wasi.tar.gz cpython)
 
 $(BUILD_DIR)/aiohttp-wasi.tar.gz: $(WASI_SDK) $(CPYTHON)
 	@mkdir -p "$(@D)"
@@ -202,6 +216,17 @@ $(CPYTHON): $(WASI_SDK)
 		-lwasi-emulated-getpid \
 		-lwasi-emulated-process-clocks \
 		-ldl)
+
+.PHONY: install-hooks
+install-hooks:
+	git config core.hooksPath .githooks
+	@echo "git hooks enabled (core.hooksPath=.githooks)"
+
+# Cross-build just the C libraries (no CPython needed). Used by the pre-commit
+# hook; also handy on its own.
+.PHONY: check-clibs
+check-clibs:
+	bash scripts/check-clibs.sh
 
 .PHONY: clean
 clean:
